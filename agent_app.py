@@ -62,6 +62,7 @@ def render_chat(
     tools_config,
     use_native: bool = False,
     tools_config_raw: dict | None = None,
+    confidence_threshold: float = 0.80,
 ):
     with st.sidebar:
         st.subheader("Conversations")
@@ -409,6 +410,7 @@ def main():
         render_chat(
             db, jev_client, mistral_client, skills_config, tools_config,
             use_native=use_native, tools_config_raw=tools_config,
+            confidence_threshold=confidence_threshold,
         )
     with tab_skills:
         render_skills_tools(skills_config, tools_config)
