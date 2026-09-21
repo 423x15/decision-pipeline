@@ -1,6 +1,8 @@
 from __future__ import annotations
 import os
+import time
 from mistralai.client.sdk import Mistral
+from mistralai.client import errors as mistral_errors
 
 DEFAULT_MODEL = "mistral-small-latest"
 
@@ -29,8 +31,16 @@ class MistralClient:
         self.model = model
 
     def synthesize(self, query: str, history: list[dict]) -> str:
-        response = self._client.chat.complete(
-            model=self.model,
-            messages=[{"role": "user", "content": build_synthesis_prompt(query, history)}],
-        )
-        return response.choices[0].message.content
+        delays = [5, 15]
+        for attempt, delay in enumerate(delays + [None]):
+            try:
+                response = self._client.chat.complete(
+                    model=self.model,
+                    messages=[{"role": "user", "content": build_synthesis_prompt(query, history)}],
+                )
+                return response.choices[0].message.content
+            except mistral_errors.SDKError as exc:
+                if "429" in str(exc) and delay is not None:
+                    time.sleep(delay)
+                    continue
+                raise
