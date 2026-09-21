@@ -35,6 +35,10 @@ def _fmt_event(event: PipelineEvent) -> str:
     if event.type == "decision":
         icon = "✅" if event.data["decision"] == "final_answer" else "🔄"
         return f"{icon} JEV → {event.data['decision']} {conf} {lat}"
+    if event.type == "low_confidence":
+        step = event.data.get("step", "")
+        choice = event.data.get("original_choice", "?")
+        return f"⚠️ Confiance faible [{conf}] → fallback sur étape {step} (choix ignoré: {choice})"
     if event.type == "final":
         return f"📝 OpenAI synthesis {lat}"
     return f"• {event.type} {lat}"
@@ -126,7 +130,10 @@ def render_chat(
         event_source = (
             native_run(user_input, mistral_client._client, tools_config_raw or tools_config)
             if use_native
-            else pipeline_run(user_input, jev_client, mistral_client, skills_config, tools_config)
+            else pipeline_run(
+                user_input, jev_client, mistral_client, skills_config, tools_config,
+                confidence_threshold=confidence_threshold,
+            )
         )
         for event in event_source:
             events.append(event)
@@ -357,6 +364,11 @@ def main():
 
     st.title("🤖 Agent Pipeline")
 
+    confidence_threshold = st.sidebar.slider(
+        "Seuil de confiance JEV", min_value=0.0, max_value=1.0,
+        value=0.80, step=0.05,
+        help="Si JEV est moins sûr que ce seuil, sa décision est ignorée (fallback safe).",
+    )
     engine_mode = st.sidebar.radio(
         "Moteur de décision",
         ["🧠 JEV (TypeSafe)", "⚡ OpenAI natif (tool use)"],
