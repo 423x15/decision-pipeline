@@ -17,17 +17,17 @@ def test_build_synthesis_prompt_empty_history():
 
 
 def test_mistral_client_synthesize_calls_api():
-    mock_mistral = MagicMock()
-    mock_mistral.chat.complete.return_value = MagicMock(
+    mock_openai = MagicMock()
+    mock_openai.chat.completions.create.return_value = MagicMock(
         choices=[MagicMock(message=MagicMock(content="La réponse est 42."))]
     )
     client = MistralClient.__new__(MistralClient)
-    client._client = mock_mistral
-    client.model = "mistral-small-latest"
+    client._client = mock_openai
+    client.model = "gpt-4o-mini"
 
     result = client.synthesize(
         "combien font 6 * 7",
         [{"tool": "calculator", "input": "6*7", "result": "42"}],
     )
     assert result == "La réponse est 42."
-    mock_mistral.chat.complete.assert_called_once()
+    mock_openai.chat.completions.create.assert_called_once()

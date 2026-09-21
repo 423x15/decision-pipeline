@@ -83,7 +83,7 @@ def render_chat(db: Database, jev_client, mistral_client, skills_config, tools_c
         st.error("TYPESAFE_API_KEY manquante dans .env")
         return
     if not mistral_client:
-        st.error("MISTRAL_API_KEY manquante dans .env")
+        st.error("OPENAI_API_KEY manquante dans .env")
         return
 
     if not conv_id:
@@ -169,7 +169,7 @@ def render_skills_tools(skills_config, tools_config):
 
 def render_debug():
     st.subheader("Variables d'environnement")
-    for key in ["TYPESAFE_API_KEY", "MISTRAL_API_KEY"]:
+    for key in ["TYPESAFE_API_KEY", "OPENAI_API_KEY"]:
         val = os.environ.get(key, "")
         status = "✅ définie" if val else "❌ manquante"
         masked = (val[:4] + "****" + val[-4:]) if len(val) > 8 else "****"
@@ -197,7 +197,7 @@ def main():
             st.session_state[key] = val
 
     st.title("🤖 JEV Agent Pipeline")
-    st.caption("JEV orchestre · Mistral synthétise · Trace inline")
+    st.caption("JEV orchestre · OpenAI synthétise · Trace inline")
 
     jev_client = None
     mistral_client = None
@@ -207,10 +207,10 @@ def main():
             jev_client = get_jev_client(api_key)
         except Exception:
             pass
-    mistral_key = os.environ.get("MISTRAL_API_KEY", "")
-    if mistral_key:
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    if openai_key:
         try:
-            mistral_client = MistralClient(api_key=mistral_key)
+            mistral_client = MistralClient(api_key=openai_key)
         except Exception:
             pass
 
