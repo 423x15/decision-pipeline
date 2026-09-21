@@ -65,6 +65,17 @@ def run(
         )
         if decision == "final_answer":
             break
+        if decision == "switch_skill":
+            skill_name, active_tools, skill_conf, skill_lat = select_skill(
+                query, skills_config, jev_client, history=history
+            )
+            yield PipelineEvent(
+                type="skill_loaded",
+                data={"skill": skill_name, "tools": active_tools, "switched": True},
+                jev_confidence=skill_conf,
+                iteration=iteration,
+                latency_ms=skill_lat,
+            )
 
     llm_prompt = build_synthesis_prompt(query, history)
     final_response = mistral_client.synthesize(query, history)

@@ -15,11 +15,16 @@ def select_skill(
     query: str,
     skills: list[dict],
     jev_client,
+    history: list[dict] | None = None,
 ) -> tuple[str, list[str], float, float]:
     criteria = {s["name"]: s["description"] for s in skills}
+    context = ""
+    if history:
+        done = ", ".join(dict.fromkeys(h["tool"] for h in history))
+        context = f"\nTools déjà appelés: {done} — cherche un skill couvrant ce qui manque encore."
     t0 = time.perf_counter()
     response = jev_client.system_one(
-        state=f"Requête utilisateur: {query}\nSkills disponibles: {', '.join(criteria)}",
+        state=f"Requête utilisateur: {query}{context}\nSkills disponibles: {', '.join(criteria)}",
         questions={
             "skill": Choice(
                 instructions="Quel skill bundle correspond le mieux à cette requête ?",

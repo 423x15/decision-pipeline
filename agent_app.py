@@ -26,7 +26,8 @@ def _fmt_event(event: PipelineEvent) -> str:
     lat = f"· {event.latency_ms:.0f}ms"
     if event.type == "skill_loaded":
         tools = ", ".join(event.data.get("tools", [])) or "—"
-        return f"🧠 JEV → {event.data['skill']} {conf} {lat}  _(tools: {tools})_"
+        prefix = "🔀 JEV switch →" if event.data.get("switched") else "🧠 JEV →"
+        return f"{prefix} {event.data['skill']} {conf} {lat}  _(tools: {tools})_"
     if event.type == "tool_called":
         preview = str(event.data.get("result", ""))[:60]
         return f"🔧 JEV → {event.data['tool']} {conf} {lat}  → `{preview}`"
@@ -34,7 +35,7 @@ def _fmt_event(event: PipelineEvent) -> str:
         icon = "✅" if event.data["decision"] == "final_answer" else "🔄"
         return f"{icon} JEV → {event.data['decision']} {conf} {lat}"
     if event.type == "final":
-        return f"📝 Mistral synthesis {lat}"
+        return f"📝 OpenAI synthesis {lat}"
     return f"• {event.type} {lat}"
 
 

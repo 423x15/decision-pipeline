@@ -27,9 +27,10 @@ def decide(
         ),
         questions={
             "next": Choice(
-                instructions="Faut-il appeler un autre tool ou a-t-on assez d'informations ?",
+                instructions="Quelle est la prochaine étape pour répondre complètement à la requête ?",
                 criteria={
-                    "call_another_tool": "Des informations manquent encore pour répondre complètement",
+                    "call_another_tool": "Des informations manquent, le skill actuel a encore des tools utiles",
+                    "switch_skill": "Des informations manquent mais elles relèvent d'un autre domaine de compétence",
                     "final_answer": "Les informations collectées sont suffisantes pour répondre",
                 },
             ),
