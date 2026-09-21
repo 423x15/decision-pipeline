@@ -74,7 +74,19 @@ def render_chat(db: Database, jev_client, mistral_client, skills_config, tools_c
                 if msg["role"] == "assistant" and msg.get("tool_trace"):
                     with st.expander("🔍 Trace JEV", expanded=False):
                         for item in msg["tool_trace"]:
-                            st.markdown(f"`{_fmt_event(PipelineEvent(**item))}`")
+                            e = PipelineEvent(**item)
+                            st.markdown(f"`{_fmt_event(e)}`")
+                        for item in msg["tool_trace"]:
+                            e = PipelineEvent(**item)
+                            if e.type == "tool_called":
+                                with st.expander(f"📥 {e.data.get('tool')} — I/O complet", expanded=False):
+                                    st.markdown("**Input (query)**")
+                                    st.code(e.data.get("input", ""), language="text")
+                                    st.markdown("**Résultat**")
+                                    st.code(str(e.data.get("result", "")), language="text")
+                            if e.type == "final" and e.data.get("llm_prompt"):
+                                with st.expander("📤 Prompt envoyé au LLM", expanded=False):
+                                    st.code(e.data["llm_prompt"], language="text")
 
     user_input = st.chat_input("Posez votre question...")
     if not user_input:
@@ -122,6 +134,16 @@ def render_chat(db: Database, jev_client, mistral_client, skills_config, tools_c
         with st.expander("🔍 Trace JEV", expanded=False):
             for line in trace_lines:
                 st.markdown(f"`{line}`")
+            for e in events:
+                if e.type == "tool_called":
+                    with st.expander(f"📥 {e.data.get('tool')} — I/O complet", expanded=False):
+                        st.markdown("**Input (query)**")
+                        st.code(e.data.get("input", ""), language="text")
+                        st.markdown("**Résultat**")
+                        st.code(str(e.data.get("result", "")), language="text")
+                if e.type == "final" and e.data.get("llm_prompt"):
+                    with st.expander("📤 Prompt envoyé au LLM", expanded=False):
+                        st.code(e.data["llm_prompt"], language="text")
 
     trace_dicts = [
         {"type": e.type, "data": e.data, "jev_confidence": e.jev_confidence,

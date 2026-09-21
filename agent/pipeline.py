@@ -6,6 +6,7 @@ from agent.skills_loader import select_skill
 from agent.tool_selector import select_tool
 from agent.decision_engine import decide, MAX_ITERATIONS
 from agent.tools import TOOL_REGISTRY
+from agent.mistral_client import build_synthesis_prompt
 
 
 @dataclass
@@ -48,7 +49,7 @@ def run(
         history.append({"tool": tool_name, "input": query, "result": tool_result})
         yield PipelineEvent(
             type="tool_called",
-            data={"tool": tool_name, "result": tool_result},
+            data={"tool": tool_name, "input": query, "result": tool_result},
             jev_confidence=tool_conf,
             iteration=iteration,
             latency_ms=tool_sel_lat,
@@ -65,10 +66,11 @@ def run(
         if decision == "final_answer":
             break
 
+    llm_prompt = build_synthesis_prompt(query, history)
     final_response = mistral_client.synthesize(query, history)
     yield PipelineEvent(
         type="final",
-        data={"response": final_response, "tool_history": history},
+        data={"response": final_response, "tool_history": history, "llm_prompt": llm_prompt},
         jev_confidence=None,
         iteration=len(history),
         latency_ms=0.0,
