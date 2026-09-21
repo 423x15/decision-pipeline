@@ -4,7 +4,7 @@ from typing import Generator
 
 from agent.skills_loader import select_skill
 from agent.tool_selector import select_tool
-from agent.decision_engine import decide, MAX_ITERATIONS
+from agent.decision_engine import decide
 from agent.tools import TOOL_REGISTRY
 from agent.mistral_client import build_synthesis_prompt
 
@@ -18,9 +18,10 @@ class PipelineEvent:
     latency_ms: float = 0.0
 
 
-CONFIDENCE_THRESHOLD: float = 0.80
-
 _FALLBACK_SKILL = "general_skills"
+
+_DEFAULT_CONFIDENCE = 0.80
+_DEFAULT_MAX_ITER = 8
 
 
 def _below_threshold(conf: float, threshold: float) -> bool:
@@ -33,7 +34,8 @@ def run(
     mistral_client,
     skills_config: list[dict],
     tools_config: dict[str, dict],
-    confidence_threshold: float = CONFIDENCE_THRESHOLD,
+    confidence_threshold: float = _DEFAULT_CONFIDENCE,
+    max_iterations: int = _DEFAULT_MAX_ITER,
 ) -> Generator[PipelineEvent, None, None]:
     history: list[dict] = []
 
@@ -56,7 +58,7 @@ def run(
         latency_ms=skill_lat,
     )
 
-    for iteration in range(MAX_ITERATIONS):
+    for iteration in range(max_iterations):
         tool_name, tool_conf, tool_sel_lat = select_tool(
             query, active_tools, tools_config, history, jev_client
         )

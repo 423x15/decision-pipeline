@@ -1,0 +1,17 @@
+# Agent configuration — all tunable parameters live here.
+# Edit from the UI (Config & Debug tab) or directly in this file.
+
+pipeline:
+  max_iterations: 8          # Max tool calls in JEV mode before forcing synthesis
+  confidence_threshold: 0.80 # JEV decisions below this threshold fall back to safe default
+
+native_engine:
+  max_iterations: 10         # Max agentic loops in OpenAI native tool-use mode
+
+reasoning_engine:
+  max_steps: 6               # Max planning steps in ReAct mode
+  max_tool_calls_per_step: 3 # Max tool calls per planning step
+
+llm:
+  provider: openai           # "openai" | "anthropic" — overridden by LLM_PROVIDER env var
+  model: gpt-4o-mini         # Model name — overridden by LLM_MODEL env var

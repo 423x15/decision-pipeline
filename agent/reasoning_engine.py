@@ -16,9 +16,10 @@ from typing import Generator
 
 from agent.pipeline import PipelineEvent
 from agent.tools import TOOL_REGISTRY
+from agent.llm_provider import LLMProvider
 
-MAX_STEPS = 6
-MAX_TOOL_CALLS_PER_STEP = 3
+_DEFAULT_MAX_STEPS = 6
+_DEFAULT_MAX_TOOL_CALLS_PER_STEP = 3
 
 
 def _skill_tools(skill_name: str, skills_config: list[dict],
@@ -52,15 +53,13 @@ def _skill_tools(skill_name: str, skills_config: list[dict],
 
 
 def _plan(query: str, skills_config: list[dict],
-          client, model: str) -> tuple[list[dict], float]:
+          provider: LLMProvider) -> tuple[list[dict], float]:
     """Ask the LLM to produce a step-by-step plan. Returns steps + latency_ms."""
     skill_names = [s["name"] for s in skills_config]
     skill_desc = "\n".join(f"  - {s['name']}: {s['description']}" for s in skills_config)
 
     t0 = time.perf_counter()
-    response = client.chat.completions.create(
-        model=model,
-        response_format={"type": "json_object"},
+    response = provider.chat(
         messages=[
             {
                 "role": "system",
@@ -77,9 +76,10 @@ def _plan(query: str, skills_config: list[dict],
             },
             {"role": "user", "content": query},
         ],
+        response_format={"type": "json_object"},
     )
     latency_ms = (time.perf_counter() - t0) * 1000
-    raw = response.choices[0].message.content or "{}"
+    raw = response.content or "{}"
     try:
         data = json.loads(raw)
         steps = data.get("steps", [])
@@ -94,14 +94,15 @@ def _plan(query: str, skills_config: list[dict],
 
 def run(
     query: str,
-    openai_client,
+    provider: LLMProvider,
     skills_config: list[dict],
     tools_config: dict[str, dict],
-    model: str = "gpt-4o-mini",
+    max_steps: int = _DEFAULT_MAX_STEPS,
+    max_tool_calls_per_step: int = _DEFAULT_MAX_TOOL_CALLS_PER_STEP,
 ) -> Generator[PipelineEvent, None, None]:
 
     # ── Phase 1 : Planning ──────────────────────────────────────────────────
-    steps, plan_lat = _plan(query, skills_config, openai_client, model)
+    steps, plan_lat = _plan(query, skills_config, provider)
     yield PipelineEvent(
         type="plan",
         data={"steps": steps, "query": query},
@@ -114,7 +115,7 @@ def run(
     step_results: list[dict] = []
 
     # ── Phase 2 : Execute each step ─────────────────────────────────────────
-    for step_idx, step in enumerate(steps[:MAX_STEPS]):
+    for step_idx, step in enumerate(steps[:max_steps]):
         goal = step.get("goal", query)
         skill_name = step.get("skill", "general_skills")
         reasoning = step.get("reasoning", "")
@@ -154,60 +155,50 @@ def run(
             {"role": "user", "content": goal},
         ]
 
-        for _ in range(MAX_TOOL_CALLS_PER_STEP):
+        for _ in range(max_tool_calls_per_step):
             t0 = time.perf_counter()
-            kwargs: dict = dict(model=model, messages=step_messages)
-            if openai_tools:
-                kwargs["tools"] = openai_tools
-                kwargs["tool_choice"] = "auto"
-            resp = openai_client.chat.completions.create(**kwargs)
+            resp = provider.chat(step_messages, tools=openai_tools or None)
             call_lat = (time.perf_counter() - t0) * 1000
 
-            msg = resp.choices[0].message
-            step_messages.append(msg.model_dump(exclude_unset=False))
+            step_messages.append(provider.assistant_message(resp))
 
-            if msg.content:
+            if resp.content:
                 yield PipelineEvent(
                     type="reasoning",
-                    data={"text": msg.content, "step": step_idx},
+                    data={"text": resp.content, "step": step_idx},
                     jev_confidence=None,
                     iteration=step_idx,
                     latency_ms=call_lat,
                 )
 
-            if not msg.tool_calls or resp.choices[0].finish_reason == "stop":
-                step_results.append({"step": goal, "tool": "—", "result": msg.content or ""})
+            if not resp.tool_calls or resp.finish_reason == "stop":
+                step_results.append({"step": goal, "tool": "—", "result": resp.content or ""})
                 break
 
-            for tool_call in msg.tool_calls:
-                name = tool_call.function.name
+            for tc in resp.tool_calls:
                 try:
-                    args = json.loads(tool_call.function.arguments)
+                    args = json.loads(tc.arguments)
                     tool_input = args.get("input", goal)
                 except (json.JSONDecodeError, KeyError):
                     tool_input = goal
 
                 t1 = time.perf_counter()
-                tool_fn = TOOL_REGISTRY.get(name)
-                result = tool_fn(tool_input, all_history) if tool_fn else f"Tool '{name}' introuvable."
+                tool_fn = TOOL_REGISTRY.get(tc.name)
+                result = tool_fn(tool_input, all_history) if tool_fn else f"Tool '{tc.name}' introuvable."
                 tool_lat = (time.perf_counter() - t1) * 1000
 
-                all_history.append({"tool": name, "input": tool_input, "result": result})
-                step_results.append({"step": goal, "tool": name, "result": result})
+                all_history.append({"tool": tc.name, "input": tool_input, "result": result})
+                step_results.append({"step": goal, "tool": tc.name, "result": result})
 
                 yield PipelineEvent(
                     type="tool_called",
-                    data={"tool": name, "input": tool_input, "result": result},
+                    data={"tool": tc.name, "input": tool_input, "result": result},
                     jev_confidence=None,
                     iteration=step_idx,
                     latency_ms=tool_lat,
                 )
 
-                step_messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": str(result),
-                })
+                step_messages.append(provider.tool_result_message(tc.id, str(result)))
 
         yield PipelineEvent(
             type="skill_unloaded",
@@ -225,16 +216,13 @@ def run(
     llm_prompt = f"Question: {query}\n\nInformations collectées:\n{context}\n\nRéponds de manière concise."
 
     t0 = time.perf_counter()
-    final_resp = openai_client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": llm_prompt}],
-    )
+    final_resp = provider.chat([{"role": "user", "content": llm_prompt}])
     synth_lat = (time.perf_counter() - t0) * 1000
 
     yield PipelineEvent(
         type="final",
         data={
-            "response": final_resp.choices[0].message.content or "",
+            "response": final_resp.content or "",
             "tool_history": all_history,
             "llm_prompt": llm_prompt,
         },

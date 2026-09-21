@@ -1,4 +1,4 @@
-# agent_app.py
+# agent_app.py — Streamlit UI for the Laya/JEV agent demo
 from __future__ import annotations
 import os
 from pathlib import Path
@@ -9,11 +9,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from agent.config_loader import load_config, CONFIG_PATH
 from agent.db import Database
 from agent.mistral_client import MistralClient
 from agent.pipeline import PipelineEvent, run as pipeline_run
 from agent.native_engine import run as native_run
 from agent.reasoning_engine import run as reasoning_run
+from agent.llm_provider import create_provider
 from agent.skills_loader import load_skills_config
 from agent.tool_selector import load_tools_config
 from jev_client import get_client as get_jev_client, default_api_key
@@ -22,6 +24,8 @@ DB_PATH = Path("db/conversations.db")
 SKILLS_YAML = Path("config/skills.yaml")
 TOOLS_YAML = Path("config/tools.yaml")
 
+
+# ── Formatting helpers ────────────────────────────────────────────────────────
 
 def _fmt_event(event: PipelineEvent) -> str:
     conf = f"[conf: {event.jev_confidence:.2f}]" if event.jev_confidence is not None else ""
@@ -52,9 +56,11 @@ def _fmt_event(event: PipelineEvent) -> str:
         choice = event.data.get("original_choice", "?")
         return f"⚠️ Confiance faible {conf} → fallback étape {step} (ignoré: {choice})"
     if event.type == "final":
-        return f"📝 OpenAI synthesis {lat}"
+        return f"📝 LLM synthesis {lat}"
     return f"• {event.type} {lat}"
 
+
+# ── Cached resources ──────────────────────────────────────────────────────────
 
 @st.cache_resource
 def get_db() -> Database:
@@ -66,16 +72,24 @@ def get_configs():
     return load_skills_config(SKILLS_YAML), load_tools_config(TOOLS_YAML)
 
 
+@st.cache_resource
+def get_agent_config():
+    return load_config()
+
+
+# ── Tab: Chat ─────────────────────────────────────────────────────────────────
+
 def render_chat(
     db: Database,
     jev_client,
+    provider,
     mistral_client,
-    skills_config,
-    tools_config,
-    use_native: bool = False,
-    use_reasoning: bool = False,
-    tools_config_raw: dict | None = None,
-    confidence_threshold: float = 0.80,
+    skills_config: list[dict],
+    tools_config: dict,
+    use_native: bool,
+    use_reasoning: bool,
+    confidence_threshold: float,
+    cfg,
 ):
     with st.sidebar:
         st.subheader("Conversations")
@@ -100,7 +114,7 @@ def render_chat(
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
                 if msg["role"] == "assistant" and msg.get("tool_trace"):
-                    with st.expander("🔍 Trace JEV", expanded=False):
+                    with st.expander("🔍 Trace", expanded=False):
                         for item in msg["tool_trace"]:
                             e = PipelineEvent(**item)
                             st.markdown(f"`{_fmt_event(e)}`")
@@ -108,7 +122,7 @@ def render_chat(
                             e = PipelineEvent(**item)
                             if e.type == "tool_called":
                                 with st.expander(f"📥 {e.data.get('tool')} — I/O complet", expanded=False):
-                                    st.markdown("**Input (query)**")
+                                    st.markdown("**Input**")
                                     st.code(e.data.get("input", ""), language="text")
                                     st.markdown("**Résultat**")
                                     st.code(str(e.data.get("result", "")), language="text")
@@ -122,8 +136,8 @@ def render_chat(
     if not use_native and not use_reasoning and not jev_client:
         st.error("TYPESAFE_API_KEY manquante dans .env")
         return
-    if not mistral_client:
-        st.error("OPENAI_API_KEY manquante dans .env")
+    if not provider:
+        st.error("OPENAI_API_KEY (ou ANTHROPIC_API_KEY) manquante dans .env")
         return
 
     if not conv_id:
@@ -143,17 +157,22 @@ def render_chat(
 
         if use_reasoning:
             event_source = reasoning_run(
-                user_input, mistral_client._client, skills_config, tools_config_raw or tools_config
+                user_input, provider, skills_config, tools_config,
+                max_steps=cfg.reasoning_max_steps,
+                max_tool_calls_per_step=cfg.reasoning_max_tool_calls_per_step,
             )
         elif use_native:
             event_source = native_run(
-                user_input, mistral_client._client, tools_config_raw or tools_config
+                user_input, provider, tools_config,
+                max_iterations=cfg.native_max_iterations,
             )
         else:
             event_source = pipeline_run(
                 user_input, jev_client, mistral_client, skills_config, tools_config,
                 confidence_threshold=confidence_threshold,
+                max_iterations=cfg.pipeline_max_iterations,
             )
+
         for event in event_source:
             events.append(event)
             if event.type in ("tool_called", "decision"):
@@ -172,13 +191,13 @@ def render_chat(
                 resp_ph.markdown(final_response)
                 trace_ph.empty()
 
-        with st.expander("🔍 Trace JEV", expanded=False):
+        with st.expander("🔍 Trace", expanded=False):
             for line in trace_lines:
                 st.markdown(f"`{line}`")
             for e in events:
                 if e.type == "tool_called":
                     with st.expander(f"📥 {e.data.get('tool')} — I/O complet", expanded=False):
-                        st.markdown("**Input (query)**")
+                        st.markdown("**Input**")
                         st.code(e.data.get("input", ""), language="text")
                         st.markdown("**Résultat**")
                         st.code(str(e.data.get("result", "")), language="text")
@@ -194,6 +213,8 @@ def render_chat(
     db.save_message(conv_id, "assistant", final_response, trace_dicts)
     st.rerun()
 
+
+# ── Tab: Skills & Tools ───────────────────────────────────────────────────────
 
 def render_skills_tools(skills_config, tools_config):
     st.subheader("Skills actifs")
@@ -230,13 +251,25 @@ def render_skills_tools(skills_config, tools_config):
             st.rerun()
 
 
+# ── Tab: Config & Debug ───────────────────────────────────────────────────────
+
 def render_debug():
     st.subheader("Variables d'environnement")
-    for key in ["TYPESAFE_API_KEY", "OPENAI_API_KEY"]:
+    for key in ["TYPESAFE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
+                "LLM_PROVIDER", "LLM_MODEL"]:
         val = os.environ.get(key, "")
         status = "✅ définie" if val else "❌ manquante"
         masked = (val[:4] + "****" + val[-4:]) if len(val) > 8 else "****"
         st.text(f"{key}: {status}  {masked if val else ''}")
+
+    st.divider()
+    st.subheader("agent_config.yaml — paramètres de l'agent")
+    content = CONFIG_PATH.read_text() if CONFIG_PATH.exists() else ""
+    new_content = st.text_area("Éditer", value=content, height=300, key="agent_config_editor")
+    if st.button("💾 Sauvegarder agent_config.yaml"):
+        CONFIG_PATH.write_text(new_content)
+        st.cache_resource.clear()
+        st.rerun()
 
     st.divider()
     decisions = st.session_state.get("session_decisions", [])
@@ -251,6 +284,8 @@ def render_debug():
         if not counts.empty:
             st.bar_chart(counts)
 
+
+# ── Tab: Guide ────────────────────────────────────────────────────────────────
 
 def render_guide():
     st.subheader("Créer un nouveau Skill + ses Tools")
@@ -279,62 +314,48 @@ Un **tool** est une fonction Python `run(query, history) -> str` enregistrée da
 
         st.markdown("#### 2. `config/tools.yaml` — décrire les tools")
         st.code("""tools:
-  # ... tools existants ...
   dcf_valuation:
     description: >
       Calcule la valeur intrinsèque d'une action par DCF
-      (flux de trésorerie actualisés). Entrée : données financières.
+      (flux de trésorerie actualisés).
     input_hint: "free cash flow, taux croissance, taux actualisation"
 
   financial_ratios:
-    description: >
-      Calcule P/E, P/B, EV/EBITDA et autres ratios boursiers.
+    description: Calcule P/E, P/B, EV/EBITDA et autres ratios boursiers.
     input_hint: "question sur les ratios d'une action ou secteur"
 
   dividend_yield:
-    description: >
-      Calcule le rendement dividende et le taux de distribution.
+    description: Calcule le rendement dividende et le taux de distribution.
     input_hint: "dividende annuel et prix de l'action" """, language="yaml")
 
     with col2:
         st.markdown("#### 3. `agent/tools/dcf_valuation.py`")
         st.code("""def run(query: str, history: list[dict]) -> str:
-    # Extraire les paramètres de la query
     fcf = _extract_number(query, "FCF", default=100)
     growth = _extract_number(query, "croissance", default=0.05)
     discount = _extract_number(query, "actualisation", default=0.10)
     terminal_growth = 0.02
-
-    # Calcul DCF sur 5 ans
     years = 5
-    total_pv = 0
-    for year in range(1, years + 1):
-        cf = fcf * (1 + growth) ** year
-        pv = cf / (1 + discount) ** year
-        total_pv += pv
-
-    # Valeur terminale
-    terminal = (fcf * (1 + growth)**years * (1 + terminal_growth)
-                / (discount - terminal_growth))
-    terminal_pv = terminal / (1 + discount)**years
-
-    intrinsic = total_pv + terminal_pv
+    total_pv = sum(
+        fcf * (1 + growth)**y / (1 + discount)**y
+        for y in range(1, years + 1)
+    )
+    terminal_pv = (
+        fcf * (1 + growth)**years * (1 + terminal_growth)
+        / (discount - terminal_growth)
+        / (1 + discount)**years
+    )
     return (
-        f"Valeur intrinsèque (DCF) : {intrinsic:.0f}M€\\n"
+        f"Valeur intrinsèque (DCF) : {total_pv + terminal_pv:.0f}M€\\n"
         f"  FCF base: {fcf}M€ | Croissance: {growth*100:.1f}%"
-        f" | Taux: {discount*100:.1f}%\\n"
-        f"  VAN flux 5 ans: {total_pv:.0f}M€"
-        f" | Valeur terminale: {terminal_pv:.0f}M€"
     )
 
-def _extract_number(text: str, keyword: str,
-                    default: float) -> float:
+def _extract_number(text, keyword, default):
     import re
-    pattern = rf"{keyword}[^0-9]*([0-9]+(?:[.,][0-9]+)?)"
-    m = re.search(pattern, text, re.IGNORECASE)
-    if m:
-        return float(m.group(1).replace(",", "."))
-    return default""", language="python")
+    m = re.search(rf"{keyword}[^0-9]*([0-9]+(?:[.,][0-9]+)?)",
+                  text, re.IGNORECASE)
+    return float(m.group(1).replace(",", ".")) if m else default""",
+                language="python")
 
         st.markdown("#### 4. `agent/tools/__init__.py` — enregistrer")
         st.code("""from agent.tools import (
@@ -353,7 +374,6 @@ TOOL_REGISTRY = {
 }""", language="python")
 
     st.divider()
-    st.markdown("#### Checklist")
     st.markdown("""
 | Étape | Fichier | Action |
 |-------|---------|--------|
@@ -362,17 +382,16 @@ TOOL_REGISTRY = {
 | 3 | `agent/tools/mon_tool.py` | Implémenter `run(query, history) -> str` |
 | 4 | `agent/tools/__init__.py` | Import + entrée dans `TOOL_REGISTRY` |
 | 5 | `tests/test_mon_tool.py` | Au moins `test_run_returns_string` |
-| 6 | UI → 🛠 Skills & Tools | Vérifier que le skill apparaît dans la liste |
-| 7 | UI → 💬 Chat | Poser une question, vérifier la trace 🔍 |
+| 6 | UI → 🛠 Skills & Tools | Vérifier que le skill apparaît |
+| 7 | UI → 💬 Chat | Tester avec une vraie question |
 """)
-
-    st.divider()
     st.info(
         "💡 **Tip JEV** — La `description` dans `skills.yaml` et `tools.yaml` est le seul signal "
-        "que JEV utilise pour router. Plus elle est précise et distinctive par rapport aux autres "
-        "skills/tools, meilleur est le routing. Inclure des exemples de données typiques aide."
+        "que JEV utilise pour router. Plus elle est précise et distinctive, meilleur est le routing."
     )
 
+
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
     st.set_page_config(page_title="JEV Agent", page_icon="🤖", layout="wide")
@@ -383,9 +402,13 @@ def main():
 
     st.title("🤖 Agent Pipeline")
 
+    cfg = get_agent_config()
+
+    # ── Sidebar controls ──────────────────────────────────────────────────────
     confidence_threshold = st.sidebar.slider(
-        "Seuil de confiance JEV", min_value=0.0, max_value=1.0,
-        value=0.80, step=0.05,
+        "Seuil de confiance JEV",
+        min_value=0.0, max_value=1.0,
+        value=cfg.pipeline_confidence_threshold, step=0.05,
         help="Si JEV est moins sûr que ce seuil, sa décision est ignorée (fallback safe).",
     )
     engine_mode = st.sidebar.radio(
@@ -395,7 +418,7 @@ def main():
             "**JEV** : classificateur rapide (50–150ms), skills en bundles, confiance calibrée.\n\n"
             "**OpenAI natif** : LLM choisit ses tools seul, tout en contexte, opaque.\n\n"
             "**ReAct Planning** : LLM planifie d'abord (todo list visible), "
-            "charge/décharge les skills par étape, raisonnement visible avant chaque tool call."
+            "charge/décharge les skills par étape, raisonnement visible."
         ),
     )
     use_native = engine_mode.startswith("⚡")
@@ -403,17 +426,29 @@ def main():
     st.sidebar.caption(
         "🔬 Plan → skills isolés → reasoning visible"
         if use_reasoning else
-        ("⚡ OpenAI décide tout" if use_native else "🧠 JEV route · OpenAI synthétise")
+        ("⚡ OpenAI décide tout" if use_native else "🧠 JEV route · LLM synthétise")
     )
 
+    # ── Client init ───────────────────────────────────────────────────────────
     jev_client = None
-    mistral_client = None
+    provider = None
+    mistral_client = None  # kept for JEV synthesis path
+
+    try:
+        provider = create_provider(
+            provider_name=cfg.llm_provider,
+            model=cfg.llm_model,
+        )
+    except ValueError:
+        pass  # missing API key — shown as error in chat
+
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     if openai_key:
         try:
             mistral_client = MistralClient(api_key=openai_key)
         except Exception:
             pass
+
     if not use_native and not use_reasoning:
         api_key = default_api_key()
         if api_key:
@@ -425,15 +460,17 @@ def main():
     db = get_db()
     skills_config, tools_config = get_configs()
 
+    # ── Tabs ──────────────────────────────────────────────────────────────────
     tab_chat, tab_skills, tab_debug, tab_guide = st.tabs(
         ["💬 Chat", "🛠 Skills & Tools", "⚙️ Config & Debug", "📖 Guide"]
     )
     with tab_chat:
         render_chat(
-            db, jev_client, mistral_client, skills_config, tools_config,
+            db, jev_client, provider, mistral_client,
+            skills_config, tools_config,
             use_native=use_native, use_reasoning=use_reasoning,
-            tools_config_raw=tools_config,
             confidence_threshold=confidence_threshold,
+            cfg=cfg,
         )
     with tab_skills:
         render_skills_tools(skills_config, tools_config)
