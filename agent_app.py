@@ -13,6 +13,7 @@ from agent.db import Database
 from agent.mistral_client import MistralClient
 from agent.pipeline import PipelineEvent, run as pipeline_run
 from agent.native_engine import run as native_run
+from agent.reasoning_engine import run as reasoning_run
 from agent.skills_loader import load_skills_config
 from agent.tool_selector import load_tools_config
 from jev_client import get_client as get_jev_client, default_api_key
@@ -25,20 +26,31 @@ TOOLS_YAML = Path("config/tools.yaml")
 def _fmt_event(event: PipelineEvent) -> str:
     conf = f"[conf: {event.jev_confidence:.2f}]" if event.jev_confidence is not None else ""
     lat = f"· {event.latency_ms:.0f}ms"
+    if event.type == "plan":
+        steps = event.data.get("steps", [])
+        goals = " → ".join(s.get("goal", "?")[:30] for s in steps)
+        return f"📋 Plan ({len(steps)} étapes) {lat}  _{goals}_"
     if event.type == "skill_loaded":
         tools = ", ".join(event.data.get("tools", [])) or "—"
-        prefix = "🔀 JEV switch →" if event.data.get("switched") else "🧠 JEV →"
-        return f"{prefix} {event.data['skill']} {conf} {lat}  _(tools: {tools})_"
+        prefix = "🔀 switch →" if event.data.get("switched") else "📦 load →"
+        goal = event.data.get("step_goal", "")
+        goal_str = f"  _{goal[:40]}_" if goal else ""
+        return f"{prefix} {event.data['skill']} {conf} {lat}  (tools: {tools}){goal_str}"
+    if event.type == "skill_unloaded":
+        return f"📤 unload → {event.data.get('skill')} {lat}"
+    if event.type == "reasoning":
+        text = event.data.get("text", "")[:120]
+        return f"💭 Reasoning  → _{text}_"
     if event.type == "tool_called":
         preview = str(event.data.get("result", ""))[:60]
-        return f"🔧 JEV → {event.data['tool']} {conf} {lat}  → `{preview}`"
+        return f"🔧 {event.data['tool']} {conf} {lat}  → `{preview}`"
     if event.type == "decision":
         icon = "✅" if event.data["decision"] == "final_answer" else "🔄"
         return f"{icon} JEV → {event.data['decision']} {conf} {lat}"
     if event.type == "low_confidence":
         step = event.data.get("step", "")
         choice = event.data.get("original_choice", "?")
-        return f"⚠️ Confiance faible [{conf}] → fallback sur étape {step} (choix ignoré: {choice})"
+        return f"⚠️ Confiance faible {conf} → fallback étape {step} (ignoré: {choice})"
     if event.type == "final":
         return f"📝 OpenAI synthesis {lat}"
     return f"• {event.type} {lat}"
@@ -61,6 +73,7 @@ def render_chat(
     skills_config,
     tools_config,
     use_native: bool = False,
+    use_reasoning: bool = False,
     tools_config_raw: dict | None = None,
     confidence_threshold: float = 0.80,
 ):
@@ -106,7 +119,7 @@ def render_chat(
     user_input = st.chat_input("Posez votre question...")
     if not user_input:
         return
-    if not use_native and not jev_client:
+    if not use_native and not use_reasoning and not jev_client:
         st.error("TYPESAFE_API_KEY manquante dans .env")
         return
     if not mistral_client:
@@ -128,14 +141,19 @@ def render_chat(
         resp_ph = st.empty()
         trace_lines: list[str] = []
 
-        event_source = (
-            native_run(user_input, mistral_client._client, tools_config_raw or tools_config)
-            if use_native
-            else pipeline_run(
+        if use_reasoning:
+            event_source = reasoning_run(
+                user_input, mistral_client._client, skills_config, tools_config_raw or tools_config
+            )
+        elif use_native:
+            event_source = native_run(
+                user_input, mistral_client._client, tools_config_raw or tools_config
+            )
+        else:
+            event_source = pipeline_run(
                 user_input, jev_client, mistral_client, skills_config, tools_config,
                 confidence_threshold=confidence_threshold,
             )
-        )
         for event in event_source:
             events.append(event)
             if event.type in ("tool_called", "decision"):
@@ -372,16 +390,20 @@ def main():
     )
     engine_mode = st.sidebar.radio(
         "Moteur de décision",
-        ["🧠 JEV (TypeSafe)", "⚡ OpenAI natif (tool use)"],
+        ["🧠 JEV (TypeSafe)", "⚡ OpenAI natif (tool use)", "🔬 ReAct Planning (transparent)"],
         help=(
-            "JEV : classificateur rapide (50–150ms) + OpenAI pour la synthèse finale.\n\n"
-            "OpenAI natif : le LLM choisit lui-même ses tools et s'arrête quand c'est fini "
-            "(style Claude Code — raisonnement + tool calls en boucle)."
+            "**JEV** : classificateur rapide (50–150ms), skills en bundles, confiance calibrée.\n\n"
+            "**OpenAI natif** : LLM choisit ses tools seul, tout en contexte, opaque.\n\n"
+            "**ReAct Planning** : LLM planifie d'abord (todo list visible), "
+            "charge/décharge les skills par étape, raisonnement visible avant chaque tool call."
         ),
     )
     use_native = engine_mode.startswith("⚡")
+    use_reasoning = engine_mode.startswith("🔬")
     st.sidebar.caption(
-        "⚡ OpenAI décide tout" if use_native else "🧠 JEV route · OpenAI synthétise"
+        "🔬 Plan → skills isolés → reasoning visible"
+        if use_reasoning else
+        ("⚡ OpenAI décide tout" if use_native else "🧠 JEV route · OpenAI synthétise")
     )
 
     jev_client = None
@@ -392,7 +414,7 @@ def main():
             mistral_client = MistralClient(api_key=openai_key)
         except Exception:
             pass
-    if not use_native:
+    if not use_native and not use_reasoning:
         api_key = default_api_key()
         if api_key:
             try:
@@ -409,7 +431,8 @@ def main():
     with tab_chat:
         render_chat(
             db, jev_client, mistral_client, skills_config, tools_config,
-            use_native=use_native, tools_config_raw=tools_config,
+            use_native=use_native, use_reasoning=use_reasoning,
+            tools_config_raw=tools_config,
             confidence_threshold=confidence_threshold,
         )
     with tab_skills:
