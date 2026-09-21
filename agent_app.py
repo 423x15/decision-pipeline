@@ -12,6 +12,7 @@ load_dotenv()
 from agent.db import Database
 from agent.mistral_client import MistralClient
 from agent.pipeline import PipelineEvent, run as pipeline_run
+from agent.native_engine import run as native_run
 from agent.skills_loader import load_skills_config
 from agent.tool_selector import load_tools_config
 from jev_client import get_client as get_jev_client, default_api_key
@@ -49,7 +50,15 @@ def get_configs():
     return load_skills_config(SKILLS_YAML), load_tools_config(TOOLS_YAML)
 
 
-def render_chat(db: Database, jev_client, mistral_client, skills_config, tools_config):
+def render_chat(
+    db: Database,
+    jev_client,
+    mistral_client,
+    skills_config,
+    tools_config,
+    use_native: bool = False,
+    tools_config_raw: dict | None = None,
+):
     with st.sidebar:
         st.subheader("Conversations")
         if st.button("➕ Nouvelle", width="stretch"):
@@ -92,7 +101,7 @@ def render_chat(db: Database, jev_client, mistral_client, skills_config, tools_c
     user_input = st.chat_input("Posez votre question...")
     if not user_input:
         return
-    if not jev_client:
+    if not use_native and not jev_client:
         st.error("TYPESAFE_API_KEY manquante dans .env")
         return
     if not mistral_client:
@@ -114,7 +123,12 @@ def render_chat(db: Database, jev_client, mistral_client, skills_config, tools_c
         resp_ph = st.empty()
         trace_lines: list[str] = []
 
-        for event in pipeline_run(user_input, jev_client, mistral_client, skills_config, tools_config):
+        event_source = (
+            native_run(user_input, mistral_client._client, tools_config_raw or tools_config)
+            if use_native
+            else pipeline_run(user_input, jev_client, mistral_client, skills_config, tools_config)
+        )
+        for event in event_source:
             events.append(event)
             if event.type in ("tool_called", "decision"):
                 st.session_state["session_decisions"].append({
@@ -341,23 +355,37 @@ def main():
         if key not in st.session_state:
             st.session_state[key] = val
 
-    st.title("🤖 JEV Agent Pipeline")
-    st.caption("JEV orchestre · OpenAI synthétise · Trace inline")
+    st.title("🤖 Agent Pipeline")
+
+    engine_mode = st.sidebar.radio(
+        "Moteur de décision",
+        ["🧠 JEV (TypeSafe)", "⚡ OpenAI natif (tool use)"],
+        help=(
+            "JEV : classificateur rapide (50–150ms) + OpenAI pour la synthèse finale.\n\n"
+            "OpenAI natif : le LLM choisit lui-même ses tools et s'arrête quand c'est fini "
+            "(style Claude Code — raisonnement + tool calls en boucle)."
+        ),
+    )
+    use_native = engine_mode.startswith("⚡")
+    st.sidebar.caption(
+        "⚡ OpenAI décide tout" if use_native else "🧠 JEV route · OpenAI synthétise"
+    )
 
     jev_client = None
     mistral_client = None
-    api_key = default_api_key()
-    if api_key:
-        try:
-            jev_client = get_jev_client(api_key)
-        except Exception:
-            pass
     openai_key = os.environ.get("OPENAI_API_KEY", "")
     if openai_key:
         try:
             mistral_client = MistralClient(api_key=openai_key)
         except Exception:
             pass
+    if not use_native:
+        api_key = default_api_key()
+        if api_key:
+            try:
+                jev_client = get_jev_client(api_key)
+            except Exception:
+                pass
 
     db = get_db()
     skills_config, tools_config = get_configs()
@@ -366,7 +394,10 @@ def main():
         ["💬 Chat", "🛠 Skills & Tools", "⚙️ Config & Debug", "📖 Guide"]
     )
     with tab_chat:
-        render_chat(db, jev_client, mistral_client, skills_config, tools_config)
+        render_chat(
+            db, jev_client, mistral_client, skills_config, tools_config,
+            use_native=use_native, tools_config_raw=tools_config,
+        )
     with tab_skills:
         render_skills_tools(skills_config, tools_config)
     with tab_debug:
