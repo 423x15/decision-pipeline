@@ -26,10 +26,15 @@ def select_tool(
         for name in active_tool_names
         if name in tools_config
     }
+    already_called = list(dict.fromkeys(h["tool"] for h in history))
     history_summary = ""
     if history:
         lines = [f"  - {h['tool']}: {str(h['result'])[:80]}" for h in history[-3:]]
-        history_summary = "\nHistorique récent:\n" + "\n".join(lines)
+        history_summary = (
+            "\nTools déjà appelés (éviter de répéter sauf si résultat insuffisant): "
+            + ", ".join(already_called)
+            + "\nHistorique récent:\n" + "\n".join(lines)
+        )
 
     t0 = time.perf_counter()
     response = jev_client.system_one(

@@ -39,4 +39,7 @@ def decide(
         },
     )
     latency_ms = (time.perf_counter() - t0) * 1000
+    sufficient = response.nouls["sufficient_info"].probability > 0.5
+    if sufficient:
+        return "final_answer", response.choices["next"].confidence, latency_ms
     return response.choices["next"].choice, response.choices["next"].confidence, latency_ms
