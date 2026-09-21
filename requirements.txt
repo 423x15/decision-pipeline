@@ -2,3 +2,6 @@ streamlit>=1.38
 pandas>=2.0
 laya
 typesafe-sdk
+python-dotenv>=1.0
+mistralai>=1.0
+pyyaml>=6.0

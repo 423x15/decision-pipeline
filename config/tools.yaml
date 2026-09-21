@@ -1,0 +1,17 @@
+# config/tools.yaml
+tools:
+  calculator:
+    description: "Évalue une expression mathématique (ex: '1500 * 0.197', '(42 + 8) / 5')"
+    input_hint: "expression mathématique en string"
+
+  datetime_tool:
+    description: "Retourne la date et l'heure courantes, ou calcule une durée entre deux dates"
+    input_hint: "query temporelle en langage naturel"
+
+  web_search:
+    description: "Recherche des informations sur un sujet (stub simulé, pas de clé requise)"
+    input_hint: "requête de recherche en string"
+
+  text_utils:
+    description: "Analyse un texte : compte les mots, les phrases, extrait les mots-clés"
+    input_hint: "texte à analyser"
