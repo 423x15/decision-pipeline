@@ -212,6 +212,128 @@ def render_debug():
             st.bar_chart(counts)
 
 
+def render_guide():
+    st.subheader("Créer un nouveau Skill + ses Tools")
+    st.markdown("""
+Un **skill** est un bundle de tools qu'JEV active selon la nature de la requête.
+Un **tool** est une fonction Python `run(query, history) -> str` enregistrée dans le pipeline.
+
+---
+
+### Exemple complet : Skill Finance
+""")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown("#### 1. `config/skills.yaml` — déclarer le skill")
+        st.code("""skills:
+  # ... skills existants ...
+  - name: finance_skills
+    description: >
+      Analyse financière, valorisation d'entreprise,
+      calcul DCF, ratios boursiers, rendement dividendes
+    tools:
+      - dcf_valuation
+      - financial_ratios
+      - dividend_yield""", language="yaml")
+
+        st.markdown("#### 2. `config/tools.yaml` — décrire les tools")
+        st.code("""tools:
+  # ... tools existants ...
+  dcf_valuation:
+    description: >
+      Calcule la valeur intrinsèque d'une action par DCF
+      (flux de trésorerie actualisés). Entrée : données financières.
+    input_hint: "free cash flow, taux croissance, taux actualisation"
+
+  financial_ratios:
+    description: >
+      Calcule P/E, P/B, EV/EBITDA et autres ratios boursiers.
+    input_hint: "question sur les ratios d'une action ou secteur"
+
+  dividend_yield:
+    description: >
+      Calcule le rendement dividende et le taux de distribution.
+    input_hint: "dividende annuel et prix de l'action" """, language="yaml")
+
+    with col2:
+        st.markdown("#### 3. `agent/tools/dcf_valuation.py`")
+        st.code("""def run(query: str, history: list[dict]) -> str:
+    # Extraire les paramètres de la query
+    fcf = _extract_number(query, "FCF", default=100)
+    growth = _extract_number(query, "croissance", default=0.05)
+    discount = _extract_number(query, "actualisation", default=0.10)
+    terminal_growth = 0.02
+
+    # Calcul DCF sur 5 ans
+    years = 5
+    total_pv = 0
+    for year in range(1, years + 1):
+        cf = fcf * (1 + growth) ** year
+        pv = cf / (1 + discount) ** year
+        total_pv += pv
+
+    # Valeur terminale
+    terminal = (fcf * (1 + growth)**years * (1 + terminal_growth)
+                / (discount - terminal_growth))
+    terminal_pv = terminal / (1 + discount)**years
+
+    intrinsic = total_pv + terminal_pv
+    return (
+        f"Valeur intrinsèque (DCF) : {intrinsic:.0f}M€\\n"
+        f"  FCF base: {fcf}M€ | Croissance: {growth*100:.1f}%"
+        f" | Taux: {discount*100:.1f}%\\n"
+        f"  VAN flux 5 ans: {total_pv:.0f}M€"
+        f" | Valeur terminale: {terminal_pv:.0f}M€"
+    )
+
+def _extract_number(text: str, keyword: str,
+                    default: float) -> float:
+    import re
+    pattern = rf"{keyword}[^0-9]*([0-9]+(?:[.,][0-9]+)?)"
+    m = re.search(pattern, text, re.IGNORECASE)
+    if m:
+        return float(m.group(1).replace(",", "."))
+    return default""", language="python")
+
+        st.markdown("#### 4. `agent/tools/__init__.py` — enregistrer")
+        st.code("""from agent.tools import (
+    calculator, datetime_tool, web_search,
+    text_utils,
+    dcf_valuation,        # ← ajouter
+    financial_ratios,     # ← ajouter
+    dividend_yield,       # ← ajouter
+)
+
+TOOL_REGISTRY = {
+    ...
+    "dcf_valuation":    dcf_valuation.run,
+    "financial_ratios": financial_ratios.run,
+    "dividend_yield":   dividend_yield.run,
+}""", language="python")
+
+    st.divider()
+    st.markdown("#### Checklist")
+    st.markdown("""
+| Étape | Fichier | Action |
+|-------|---------|--------|
+| 1 | `config/skills.yaml` | Ajouter le skill + liste des tools |
+| 2 | `config/tools.yaml` | Décrire chaque tool (description précise pour JEV) |
+| 3 | `agent/tools/mon_tool.py` | Implémenter `run(query, history) -> str` |
+| 4 | `agent/tools/__init__.py` | Import + entrée dans `TOOL_REGISTRY` |
+| 5 | `tests/test_mon_tool.py` | Au moins `test_run_returns_string` |
+| 6 | UI → 🛠 Skills & Tools | Vérifier que le skill apparaît dans la liste |
+| 7 | UI → 💬 Chat | Poser une question, vérifier la trace 🔍 |
+""")
+
+    st.divider()
+    st.info(
+        "💡 **Tip JEV** — La `description` dans `skills.yaml` et `tools.yaml` est le seul signal "
+        "que JEV utilise pour router. Plus elle est précise et distinctive par rapport aux autres "
+        "skills/tools, meilleur est le routing. Inclure des exemples de données typiques aide."
+    )
+
+
 def main():
     st.set_page_config(page_title="JEV Agent", page_icon="🤖", layout="wide")
 
@@ -240,13 +362,17 @@ def main():
     db = get_db()
     skills_config, tools_config = get_configs()
 
-    tab_chat, tab_skills, tab_debug = st.tabs(["💬 Chat", "🛠 Skills & Tools", "⚙️ Config & Debug"])
+    tab_chat, tab_skills, tab_debug, tab_guide = st.tabs(
+        ["💬 Chat", "🛠 Skills & Tools", "⚙️ Config & Debug", "📖 Guide"]
+    )
     with tab_chat:
         render_chat(db, jev_client, mistral_client, skills_config, tools_config)
     with tab_skills:
         render_skills_tools(skills_config, tools_config)
     with tab_debug:
         render_debug()
+    with tab_guide:
+        render_guide()
 
 
 if __name__ == "__main__":
