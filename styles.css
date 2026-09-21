@@ -1,0 +1,198 @@
+.laya-header {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 4px;
+}
+.laya-header h1 {
+    font-size: 1.9rem;
+    margin: 0;
+}
+.laya-header-sub {
+    color: #c3c2b7;
+    font-size: 0.95rem;
+    margin-bottom: 18px;
+}
+.laya-facts {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+}
+.laya-fact {
+    background: #1a1a19;
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 0.78rem;
+    color: #c3c2b7;
+}
+
+.laya-hero {
+    background: #1a1a19;
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 14px;
+    padding: 18px 22px;
+    margin-bottom: 18px;
+}
+.laya-hero-value {
+    font-size: 2.6rem;
+    font-weight: 700;
+    color: #ffffff;
+    line-height: 1;
+}
+.laya-hero-unit {
+    font-size: 1.1rem;
+    color: #898781;
+    margin-left: 4px;
+}
+.laya-hero-sub {
+    color: #c3c2b7;
+    font-size: 0.85rem;
+    margin-top: 6px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.laya-mode-badge {
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+.laya-mode-mock {
+    background: rgba(250, 178, 25, 0.15);
+    color: #fab219;
+}
+.laya-mode-real {
+    background: rgba(12, 163, 12, 0.15);
+    color: #0ca30c;
+}
+
+.laya-card {
+    background: #1a1a19;
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 14px;
+}
+.laya-card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.laya-card-title {
+    font-weight: 600;
+    color: #ffffff;
+    font-size: 0.98rem;
+}
+.laya-type-badge {
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    letter-spacing: 0.05em;
+    padding: 2px 8px;
+    border-radius: 999px;
+    color: #c3c2b7;
+    border: 1px solid rgba(255,255,255,0.15);
+    white-space: nowrap;
+}
+.laya-winner {
+    color: #c3c2b7;
+    font-size: 0.9rem;
+    margin-bottom: 12px;
+}
+.laya-winner b {
+    color: #ffffff;
+}
+.laya-winner-desc {
+    color: #898781;
+    margin-left: 6px;
+}
+
+.laya-bar-row {
+    display: grid;
+    grid-template-columns: 140px 1fr 56px;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.laya-bar-label {
+    color: #ffffff;
+    font-size: 0.86rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.laya-bar-track {
+    background: #0d0d0d;
+    border-radius: 4px;
+    height: 14px;
+    overflow: hidden;
+}
+.laya-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.2s ease;
+}
+.laya-bar-pct {
+    color: #c3c2b7;
+    font-size: 0.82rem;
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+}
+
+.laya-noul-track {
+    height: 18px;
+}
+
+.laya-score-track {
+    position: relative;
+    background: #0d0d0d;
+    border-radius: 6px;
+    height: 10px;
+    margin: 14px 4px 6px 4px;
+}
+.laya-score-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    border-radius: 6px;
+}
+.laya-score-marker {
+    position: absolute;
+    top: 50%;
+    width: 14px;
+    height: 14px;
+    background: #ffffff;
+    border: 3px solid #3987e5;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+}
+.laya-score-ticks {
+    display: flex;
+    justify-content: space-between;
+    padding: 0 4px;
+}
+.laya-score-tick {
+    color: #898781;
+    font-size: 0.75rem;
+}
+.laya-score-tick-active {
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.laya-state-preview {
+    background: #0d0d0d;
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: #c3c2b7;
+    font-size: 0.82rem;
+    white-space: pre-wrap;
+    max-height: 140px;
+    overflow-y: auto;
+}
