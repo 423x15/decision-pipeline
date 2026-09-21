@@ -18,7 +18,7 @@ def _make_jev(skill="math_skills", tool="calculator", decision="final_answer"):
             resp.choices = {"tool": MagicMock(choice=tool, confidence=0.9)}
         else:
             resp.choices = {"next": MagicMock(choice=decision, confidence=0.9)}
-            resp.nouls = {"sufficient_info": MagicMock(probability=0.8)}
+            resp.nouls = {"sufficient_info": MagicMock(noul=0.8)}
         return resp
     client.system_one.side_effect = side_effect
     return client
