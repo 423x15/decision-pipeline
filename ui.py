@@ -44,12 +44,16 @@ def _md(html_str: str) -> None:
     st.markdown(_flat(html_str), unsafe_allow_html=True)
 
 
+MODE_BADGES = {
+    "mock": ('laya-mode-mock', 'Démo simulée'),
+    "laya": ('laya-mode-real', 'Laya (local)'),
+    "jev": ('laya-mode-real', 'Jev (API TypeSafe)'),
+}
+
+
 def render_latency(latency_ms: float, mode: str) -> None:
-    badge = (
-        '<span class="laya-mode-badge laya-mode-mock">Démo simulée</span>'
-        if mode == "mock"
-        else '<span class="laya-mode-badge laya-mode-real">Modèle réel</span>'
-    )
+    css_class, label = MODE_BADGES.get(mode, ('laya-mode-real', mode))
+    badge = f'<span class="laya-mode-badge {css_class}">{html.escape(label)}</span>'
     _md(f"""
         <div class="laya-hero">
             <div class="laya-hero-value">{latency_ms:.1f}<span class="laya-hero-unit">ms</span></div>
@@ -143,7 +147,7 @@ def render_score(key: str, question: dict, answer: dict) -> None:
 
 
 def render_noul(key: str, question: dict, answer: dict) -> None:
-    p = _get_first(answer, ["probability", "p", "score", "value"], 0.0)
+    p = _get_first(answer, ["probability", "p", "noul", "score", "value"], 0.0)
     try:
         p = float(p)
     except (TypeError, ValueError):

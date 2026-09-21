@@ -6,9 +6,12 @@ from pathlib import Path
 import pandas as pd
 import streamlit as st
 
+from jev_client import JevError, default_api_key, get_client as get_jev_client, run_jev_predict
 from laya_client import LayaLoadError, detect_device, load_agent, run_mock_predict, run_real_predict
 from scenarios import SCENARIO_ORDER, SCENARIOS
 from ui import render_results
+
+PROVIDERS = ["Démo simulée", "Laya (modèle local)", "Jev (API TypeSafe)"]
 
 
 def load_css() -> None:
@@ -89,7 +92,7 @@ def main() -> None:
             <h1>🧠 Laya Playground</h1>
         </div>
         <div class="laya-header-sub">
-            Moteur de décisions typées non-autorégressif — convaiinnovations/laya
+            Moteur de décisions typées — Laya (local, convaiinnovations/laya) ou Jev (API TypeSafe)
         </div>
         <div class="laya-facts">
             <span class="laya-fact">421M paramètres</span>
@@ -105,23 +108,23 @@ def main() -> None:
     )
 
     with st.sidebar:
-        st.subheader("Mode")
-        mode = st.radio(
+        st.subheader("Provider")
+        provider = st.radio(
             "Source des réponses",
-            ["Démo simulée", "Modèle réel (local)"],
+            PROVIDERS,
             index=0,
             help=(
-                "Démo simulée : réponses factices déterministes, pour explorer l'interface "
-                "instantanément sans rien télécharger. Modèle réel : télécharge et charge "
-                "convaiinnovations/laya via le package pip 'laya' (premier chargement = "
-                "téléchargement des poids, nécessite une connexion internet)."
+                "Démo simulée : réponses factices, pour explorer l'interface sans rien "
+                "installer. Laya : modèle open-weights téléchargé et exécuté 100% en local. "
+                "Jev : API hébergée par TypeSafe — les données quittent ta machine et partent "
+                "vers leur cloud."
             ),
         )
-        mock_mode = mode == "Démo simulée"
 
         agent = None
-        load_error = None
-        if not mock_mode:
+        jev_client = None
+
+        if provider == "Laya (modèle local)":
             device = detect_device()
             st.caption(f"Device détecté : `{device}`")
             if st.button("Charger le modèle Laya", use_container_width=True):
@@ -142,6 +145,24 @@ def main() -> None:
                 st.error(load_error)
             else:
                 st.info("Cliquez sur 'Charger le modèle Laya' avant de lancer une décision.")
+
+        elif provider == "Jev (API TypeSafe)":
+            st.caption("⚠️ Appel réseau vers l'API hébergée de TypeSafe — pas local.")
+            api_key = st.text_input(
+                "Clé API TypeSafe",
+                value=default_api_key(),
+                type="password",
+                help="Créée sur console.typesafe.ai, ou exportée en variable d'environnement TYPESAFE_API_KEY.",
+            )
+            if api_key:
+                try:
+                    jev_client = get_jev_client(api_key)
+                    st.success("Client Jev prêt.")
+                except JevError as exc:
+                    jev_client = None
+                    st.error(str(exc))
+            else:
+                st.info("Renseigne ta clé API pour activer Jev.")
 
         st.divider()
         st.subheader("Scénario")
@@ -202,36 +223,46 @@ def main() -> None:
         if run_clicked:
             if not questions:
                 st.warning("Ajoutez au moins une question typée avant de lancer la décision.")
-            elif mock_mode:
-                result, latency_ms = run_mock_predict(state_text, questions)
-                render_results(result, questions, latency_ms, mode="mock")
+                run_result = None
+            elif provider == "Démo simulée":
+                run_result = ("mock", *run_mock_predict(state_text, questions))
+            elif provider == "Laya (modèle local)":
+                if agent is None:
+                    st.warning("Chargez d'abord le modèle Laya depuis la barre latérale.")
+                    run_result = None
+                else:
+                    try:
+                        result, latency_ms = run_real_predict(agent, state_text, questions)
+                    except Exception as exc:  # noqa: BLE001
+                        st.error(f"Erreur pendant l'inférence : {exc}")
+                        run_result = None
+                    else:
+                        run_result = ("laya", result, latency_ms)
+            else:  # Jev (API TypeSafe)
+                if jev_client is None:
+                    st.warning("Renseigne une clé API valide dans la barre latérale.")
+                    run_result = None
+                else:
+                    try:
+                        result, latency_ms = run_jev_predict(jev_client, state_text, questions)
+                    except JevError as exc:
+                        st.error(str(exc))
+                        run_result = None
+                    else:
+                        run_result = ("jev", result, latency_ms)
+
+            if run_result is not None:
+                mode, result, latency_ms = run_result
+                render_results(result, questions, latency_ms, mode=mode)
                 st.session_state["history"].insert(
                     0,
                     {
                         "heure": datetime.now().strftime("%H:%M:%S"),
                         "scénario": scenario_name,
-                        "mode": "démo",
+                        "provider": mode,
                         "latence_ms": round(latency_ms, 1),
                     },
                 )
-            elif agent is None:
-                st.warning("Chargez d'abord le modèle réel depuis la barre latérale.")
-            else:
-                try:
-                    result, latency_ms = run_real_predict(agent, state_text, questions)
-                except Exception as exc:  # noqa: BLE001
-                    st.error(f"Erreur pendant l'inférence : {exc}")
-                else:
-                    render_results(result, questions, latency_ms, mode="real")
-                    st.session_state["history"].insert(
-                        0,
-                        {
-                            "heure": datetime.now().strftime("%H:%M:%S"),
-                            "scénario": scenario_name,
-                            "mode": "réel",
-                            "latence_ms": round(latency_ms, 1),
-                        },
-                    )
         else:
             st.info("Configurez l'état et les questions à gauche, puis lancez la décision.")
 
