@@ -1,6 +1,5 @@
 # agent_app.py
 from __future__ import annotations
-import json
 import os
 from pathlib import Path
 
@@ -104,6 +103,14 @@ def render_chat(db: Database, jev_client, mistral_client, skills_config, tools_c
 
         for event in pipeline_run(user_input, jev_client, mistral_client, skills_config, tools_config):
             events.append(event)
+            if event.type in ("tool_called", "decision"):
+                st.session_state["session_decisions"].append({
+                    "type": event.type,
+                    "tool": event.data.get("tool", event.data.get("decision", "")),
+                    "confidence": event.jev_confidence,
+                    "latency_ms": round(event.latency_ms, 1),
+                    "iteration": event.iteration,
+                })
             if event.type != "final":
                 trace_lines.append(_fmt_event(event))
                 trace_ph.markdown("\n\n".join(f"`{l}`" for l in trace_lines))
@@ -115,7 +122,6 @@ def render_chat(db: Database, jev_client, mistral_client, skills_config, tools_c
         with st.expander("🔍 Trace JEV", expanded=False):
             for line in trace_lines:
                 st.markdown(f"`{line}`")
-        st.markdown(final_response)
 
     trace_dicts = [
         {"type": e.type, "data": e.data, "jev_confidence": e.jev_confidence,
