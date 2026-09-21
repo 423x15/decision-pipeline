@@ -14,7 +14,7 @@ def test_decide_returns_jev_choice_before_max():
     mock_client = MagicMock()
     mock_client.system_one.return_value = MagicMock(
         choices={"next": MagicMock(choice="final_answer", confidence=0.92)},
-        nouls={"sufficient_info": MagicMock(probability=0.88)},
+        nouls={"sufficient_info": MagicMock(noul=0.88)},
     )
     decision, confidence, latency = decide(
         "quelle est la date?",
@@ -28,7 +28,7 @@ def test_decide_call_another_tool():
     mock_client = MagicMock()
     mock_client.system_one.return_value = MagicMock(
         choices={"next": MagicMock(choice="call_another_tool", confidence=0.75)},
-        nouls={"sufficient_info": MagicMock(probability=0.3)},
+        nouls={"sufficient_info": MagicMock(noul=0.3)},
     )
     decision, _, _ = decide(
         "combien font 3*7 et quelle heure",
