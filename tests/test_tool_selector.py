@@ -13,6 +13,19 @@ def test_load_tools_config_has_description():
     for name, meta in load_tools_config(TOOLS_YAML).items():
         assert "description" in meta
 
+def test_select_tool_empty_tools_returns_skip():
+    tool_name, confidence, latency = select_tool(
+        query="bonjour comment vas-tu",
+        active_tool_names=[],
+        tools_config={},
+        history=[],
+        jev_client=None,
+    )
+    assert tool_name == "__skip__"
+    assert confidence == 1.0
+    assert latency == 0.0
+
+
 def test_select_tool_returns_tuple():
     mock_client = MagicMock()
     mock_client.system_one.return_value = MagicMock(

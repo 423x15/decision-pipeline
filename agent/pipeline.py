@@ -39,6 +39,9 @@ def run(
         tool_name, tool_conf, tool_sel_lat = select_tool(
             query, active_tools, tools_config, history, jev_client
         )
+        if tool_name == "__skip__":
+            break
+
         tool_fn = TOOL_REGISTRY.get(tool_name)
         tool_result = tool_fn(query, history) if tool_fn else f"Tool '{tool_name}' non trouvé."
 

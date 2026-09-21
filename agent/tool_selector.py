@@ -19,7 +19,7 @@ def select_tool(
     jev_client,
 ) -> tuple[str, float, float]:
     if not active_tool_names:
-        return "web_search", 0.5, 0.0
+        return "__skip__", 1.0, 0.0
 
     criteria = {
         name: tools_config[name]["description"]
