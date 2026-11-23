@@ -39,7 +39,7 @@ def _build_question(q: dict):
         return Score(instructions=instructions, criteria=q.get("criteria") or [])
     if qtype == "noul":
         return Noul(instructions=instructions)
-    raise JevError(f"Type de question non supporté par Jev : {qtype!r}")
+    raise JevError(f"Unsupported question type: {qtype!r}")
 
 
 @st.cache_resource(show_spinner=False)
@@ -48,19 +48,19 @@ def get_client(api_key: str):
         from typesafe_sdk import TypeSafeClient
     except ImportError as exc:
         raise JevError(
-            "Le package 'typesafe-sdk' n'est pas installé. Lancez : pip install typesafe-sdk"
+            "Package 'typesafe-sdk' is not installed. Run: pip install typesafe-sdk"
         ) from exc
 
     if not api_key:
         raise JevError(
-            f"Aucune clé API TypeSafe. Renseigne-la dans la barre latérale ou "
-            f"exporte la variable d'environnement {ENV_KEY} (créée sur https://console.typesafe.ai/)."
+            f"No TypeSafe API key. Set it in the sidebar or "
+            f"export the {ENV_KEY} environment variable (create one at https://console.typesafe.ai/)."
         )
 
     try:
         return TypeSafeClient(api_key=api_key)
     except Exception as exc:  # noqa: BLE001
-        raise JevError(f"Impossible d'initialiser le client TypeSafe : {exc}") from exc
+        raise JevError(f"Failed to initialize TypeSafe client: {exc}") from exc
 
 
 def default_api_key() -> str:
@@ -74,7 +74,7 @@ def run_jev_predict(client, state: Any, questions: dict[str, Any]) -> tuple[dict
     try:
         response = client.system_one(state=state, questions=built_questions)
     except Exception as exc:  # noqa: BLE001
-        raise JevError(f"Erreur d'appel à l'API TypeSafe : {exc}") from exc
+        raise JevError(f"TypeSafe API call failed: {exc}") from exc
     latency_ms = (time.perf_counter() - t0) * 1000
 
     buckets = {"choice": "choices", "score": "scores", "noul": "nouls"}

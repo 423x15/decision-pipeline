@@ -72,10 +72,10 @@ def run(
                 iteration=iteration,
                 latency_ms=tool_sel_lat,
             )
-            break  # confiance trop faible → passe directement à la synthèse
+            break  # confidence too low → go directly to synthesis
 
         tool_fn = TOOL_REGISTRY.get(tool_name)
-        tool_result = tool_fn(query, history) if tool_fn else f"Tool '{tool_name}' non trouvé."
+        tool_result = tool_fn(query, history) if tool_fn else f"Tool '{tool_name}' not found."
 
         history.append({"tool": tool_name, "input": query, "result": tool_result})
         yield PipelineEvent(

@@ -1,17 +1,21 @@
 # config/skills.yaml
 skills:
   - name: math_skills
-    description: "Calculs mathématiques, statistiques, conversions numériques, dates et durées"
+    description: "Mathematical calculations, statistics, numerical conversions, dates and durations"
     tools: [calculator, datetime_tool]
 
   - name: search_skills
-    description: "Recherche d'informations, faits, actualités, définitions"
+    description: "Information retrieval, facts, news, definitions, current events, prices, real-time data"
     tools: [web_search]
 
+  - name: code_skills
+    description: "Write, run, or debug Python code, scripts, algorithms, data transformations"
+    tools: [code_runner]
+
   - name: text_skills
-    description: "Analyse de texte, comptage de mots, extraction d'entités"
+    description: "Text analysis, word counting, sentence splitting, keyword extraction"
     tools: [text_utils]
 
   - name: general_skills
-    description: "Question générale ne nécessitant pas d'outil spécifique"
+    description: "General question that does not require a specific tool"
     tools: []

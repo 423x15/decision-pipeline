@@ -1,5 +1,5 @@
 """
-Native OpenAI tool-use engine — Claude Code style agentic loop.
+Native LLM tool-use engine — agentic loop without skill routing.
 
 The LLM decides which tools to call and when to stop.
 No JEV, no skill bundles, no iteration counter.
@@ -32,7 +32,7 @@ def _build_openai_tools(tools_config: dict[str, dict]) -> list[dict]:
                     "properties": {
                         "input": {
                             "type": "string",
-                            "description": meta.get("input_hint", "query en langage naturel"),
+                            "description": meta.get("input_hint", "natural language query"),
                         }
                     },
                     "required": ["input"],
@@ -53,8 +53,8 @@ def run(
         {
             "role": "system",
             "content": (
-                "Tu es un assistant qui utilise des tools pour répondre précisément. "
-                "Appelle les tools nécessaires, puis formule une réponse concise."
+                "You are a helpful assistant that uses tools to answer questions precisely. "
+                "Call the necessary tools, then provide a concise answer."
             ),
         },
         {"role": "user", "content": query},
@@ -88,7 +88,7 @@ def run(
 
             t1 = time.perf_counter()
             tool_fn = TOOL_REGISTRY.get(tc.name)
-            result = tool_fn(tool_input, history) if tool_fn else f"Tool '{tc.name}' introuvable."
+            result = tool_fn(tool_input, history) if tool_fn else f"Tool '{tc.name}' not found."
             tool_lat = (time.perf_counter() - t1) * 1000
 
             history.append({"tool": tc.name, "input": tool_input, "result": result})
@@ -106,7 +106,7 @@ def run(
     # MAX_NATIVE_ITERATIONS reached — force final synthesis
     t0 = time.perf_counter()
     fallback = provider.chat(
-        messages + [{"role": "user", "content": "Formule maintenant la réponse finale."}]
+        messages + [{"role": "user", "content": "Now provide the final answer."}]
     )
     latency_ms = (time.perf_counter() - t0) * 1000
     yield PipelineEvent(

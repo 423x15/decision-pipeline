@@ -3,12 +3,16 @@ from __future__ import annotations
 import re
 from collections import Counter
 
-_STOP = {"le","la","les","de","du","des","un","une","et","en","à","au","aux",
+_STOP = {"the","a","an","of","in","on","at","to","for","is","are","was","were",
+         "and","or","but","not","with","by","from","as","it","its","this","that",
+         "be","been","being","have","has","had","do","does","did","will","would",
+         # French stop words (kept for bilingual support)
+         "le","la","les","de","du","des","un","une","et","en","au","aux",
          "est","je","tu","il","elle","nous","vous","ils","elles","que","qui",
          "ne","pas","se","ce","sa","son","dans","sur","par","pour","avec"}
 
 def _extract_text(query: str) -> str:
-    for sep in ["dans:", "dans :", "texte:", "texte :", "analyze:", "analyse:"]:
+    for sep in ["dans:", "dans :", "texte:", "texte :", "analyze:", "analyse:", "text:"]:
         if sep in query.lower():
             return query[query.lower().index(sep)+len(sep):].strip()
     return query
@@ -20,8 +24,8 @@ def run(query: str, history: list[dict]) -> str:
     keywords = [w for w in words if w not in _STOP and len(w) > 2]
     top = [w for w, _ in Counter(keywords).most_common(5)]
     return (
-        f"Analyse ({len(text)} caractères) :\n"
-        f"- Mots : {len(words)}\n"
-        f"- Phrases : {len(sentences)}\n"
-        f"- Mots-clés : {', '.join(top) if top else 'aucun'}"
+        f"Text analysis ({len(text)} chars):\n"
+        f"- Words: {len(words)}\n"
+        f"- Sentences: {len(sentences)}\n"
+        f"- Keywords: {', '.join(top) if top else 'none'}"
     )

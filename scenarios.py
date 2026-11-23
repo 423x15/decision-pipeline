@@ -12,102 +12,102 @@ from typing import Any
 #   - noul   -> omitted (yes/no-ish calibrated probability question)
 
 SCENARIOS: dict[str, dict[str, Any]] = {
-    "Triage ticket support": {
-        "description": "Reprend l'exemple officiel du modèle : router un email client.",
+    "Support Ticket Triage": {
+        "description": "Reproduces the official model example: routing a customer email.",
         "state": (
-            "De: client@acme-corp.com\n"
-            "Objet: Facturation en double sur la facture #4411\n"
-            "Message: Bonjour, nous avons été prélevés deux fois pour le mois de mars. "
-            "C'est la deuxième fois que ça arrive et c'est très frustrant, si ce n'est "
-            "pas corrigé rapidement nous allons changer de prestataire."
+            "From: client@acme-corp.com\n"
+            "Subject: Double charge on invoice #4411\n"
+            "Message: Hello, we were charged twice for the month of March. "
+            "This is the second time this has happened and it is very frustrating. "
+            "If this is not corrected quickly we will switch to a competitor."
         ),
         "questions": {
             "department": {
                 "type": "choice",
-                "instructions": "Quel service doit traiter cette demande ?",
+                "instructions": "Which department should handle this request?",
                 "criteria": {
-                    "billing": "Facturation, paiements, remboursements",
-                    "technical": "Bugs, problèmes techniques",
-                    "sales": "Nouvelles ventes, upsell",
+                    "billing": "Billing, payments, refunds",
+                    "technical": "Bugs, technical issues",
+                    "sales": "New sales, upsell",
                 },
             },
             "urgency": {
                 "type": "score",
-                "instructions": "Quel est le niveau d'urgence de la demande ?",
-                "criteria": ["pas urgent", "à traiter bientôt", "critique"],
+                "instructions": "What is the urgency level of the request?",
+                "criteria": ["not urgent", "address soon", "critical"],
             },
             "churn_risk": {
                 "type": "noul",
-                "instructions": "Le client menace-t-il de partir chez un concurrent ?",
+                "instructions": "Is the customer threatening to leave for a competitor?",
             },
         },
     },
-    "Modération de contenu": {
-        "description": "Détecte le type et la sévérité d'un message potentiellement problématique.",
+    "Content Moderation": {
+        "description": "Detects the type and severity of a potentially problematic message.",
         "state": (
-            "Commentaire posté sur le forum communautaire : "
-            "\"Sérieusement, arrêtez de spammer ce topic avec vos liens pourris, "
-            "vous êtes juste ici pour vendre votre truc, c'est du foutage de gueule.\""
+            "Comment posted on the community forum: "
+            "\"Seriously, stop spamming this topic with your garbage links. "
+            "You're only here to sell your stuff, this is a complete joke.\""
         ),
         "questions": {
             "category": {
                 "type": "choice",
-                "instructions": "Quelle est la catégorie principale du message ?",
+                "instructions": "What is the main category of this message?",
                 "criteria": {
-                    "safe": "Contenu acceptable, ton normal",
-                    "spam": "Publicité ou promotion non sollicitée",
-                    "harassment": "Insulte ou attaque envers une personne",
-                    "hate": "Discours de haine",
+                    "safe": "Acceptable content, normal tone",
+                    "spam": "Unsolicited advertising or promotion",
+                    "harassment": "Insult or attack directed at a person",
+                    "hate": "Hate speech",
                 },
             },
             "severity": {
                 "type": "score",
-                "instructions": "Quelle est la sévérité du contenu ?",
-                "criteria": ["bénin", "modéré", "sévère"],
+                "instructions": "What is the severity of the content?",
+                "criteria": ["benign", "moderate", "severe"],
             },
             "needs_human_review": {
                 "type": "noul",
-                "instructions": "Ce message nécessite-t-il une revue humaine avant action ?",
+                "instructions": "Does this message require human review before action?",
             },
         },
     },
-    "Routage de modèle LLM": {
-        "description": "Décide quel modèle LLM (petit/moyen/gros) doit traiter une requête utilisateur.",
+    "LLM Model Routing": {
+        "description": "Decides which LLM tier (small/medium/large) should handle a user query.",
         "state": (
-            "Requête utilisateur : \"Peux-tu m'expliquer étape par étape comment "
-            "prouver que la somme des n premiers entiers impairs vaut n^2, puis "
-            "écrire une preuve formelle en Lean 4 ?\""
+            "User query: \"Can you explain step by step how to prove that "
+            "the sum of the first n odd integers equals n^2, then write "
+            "a formal proof in Lean 4?\""
         ),
         "questions": {
             "best_model_tier": {
                 "type": "choice",
-                "instructions": "Quel niveau de modèle est le plus adapté pour traiter cette requête ?",
+                "instructions": "Which model tier is most appropriate for this query?",
                 "criteria": {
-                    "small": "Modèle petit/rapide, tâches simples",
-                    "medium": "Modèle intermédiaire, raisonnement modéré",
-                    "large": "Modèle le plus puissant, raisonnement complexe",
+                    "small": "Small/fast model, simple tasks",
+                    "medium": "Intermediate model, moderate reasoning",
+                    "large": "Most powerful model, complex reasoning",
                 },
             },
             "complexity": {
                 "type": "score",
-                "instructions": "Quelle est la complexité de raisonnement requise ?",
-                "criteria": ["simple", "modérée", "élevée"],
+                "instructions": "What level of reasoning complexity is required?",
+                "criteria": ["simple", "moderate", "high"],
             },
             "needs_tools": {
                 "type": "noul",
-                "instructions": "Cette requête nécessite-t-elle d'appeler un outil externe (code, recherche, calcul) ?",
+                "instructions": "Does this query require calling an external tool (code, search, calculation)?",
             },
         },
     },
-    "Personnalisé": {
-        "description": "Partez d'un état vide et construisez vos propres questions typées.",
+    "Custom": {
+        "description": "Start from a blank state and build your own typed questions.",
         "state": (
-            "Collez ici votre propre texte, email, ticket ou JSON à faire évaluer par Laya."
+            "Paste your own text, email, ticket or JSON here to be evaluated by Laya."
         ),
         "questions": {
             "example_choice": {
                 "type": "choice",
-                "instructions": "Exemple de question à choix : modifiez-moi",
+                "instructions": "Example choice question: edit me",
                 "criteria": {"option_a": "Description A", "option_b": "Description B"},
             },
         },

@@ -1,17 +1,21 @@
 # config/tools.yaml
 tools:
   calculator:
-    description: "Évalue une expression mathématique (ex: '1500 * 0.197', '(42 + 8) / 5')"
-    input_hint: "expression mathématique en string"
+    description: "Evaluates a mathematical expression (e.g. '1500 * 0.197', '(42 + 8) / 5')"
+    input_hint: "mathematical expression as a string"
 
   datetime_tool:
-    description: "Retourne la date et l'heure courantes, ou calcule une durée entre deux dates"
-    input_hint: "query temporelle en langage naturel"
+    description: "Returns the current date and time, or computes the duration between two dates"
+    input_hint: "temporal query in natural language"
 
   web_search:
-    description: "Recherche des informations sur un sujet (stub simulé, pas de clé requise)"
-    input_hint: "requête de recherche en string"
+    description: "Searches the web for real-time information: news, facts, prices, definitions, current events"
+    input_hint: "search query as a string"
+
+  code_runner:
+    description: "Executes Python code in a sandboxed environment and returns stdout and variable values"
+    input_hint: "Python code as a string or inside a ```python block"
 
   text_utils:
-    description: "Analyse un texte : compte les mots, les phrases, extrait les mots-clés"
-    input_hint: "texte à analyser"
+    description: "Analyses a text: counts words and sentences, extracts keywords"
+    input_hint: "text to analyse"

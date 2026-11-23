@@ -31,21 +31,21 @@ def select_tool(
     if history:
         lines = [f"  - {h['tool']}: {str(h['result'])[:80]}" for h in history[-3:]]
         history_summary = (
-            "\nTools déjà appelés (éviter de répéter sauf si résultat insuffisant): "
+            "\nAlready called tools (avoid repeating unless result was insufficient): "
             + ", ".join(already_called)
-            + "\nHistorique récent:\n" + "\n".join(lines)
+            + "\nRecent history:\n" + "\n".join(lines)
         )
 
     t0 = time.perf_counter()
     response = jev_client.system_one(
         state=(
-            f"Requête: {query}"
+            f"Query: {query}"
             f"{history_summary}\n"
-            f"Tools disponibles: {', '.join(criteria)}"
+            f"Available tools: {', '.join(criteria)}"
         ),
         questions={
             "tool": Choice(
-                instructions="Quel tool appeler pour progresser vers la réponse ?",
+                instructions="Which tool should be called to make progress toward the answer?",
                 criteria=criteria,
             )
         },

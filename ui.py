@@ -45,7 +45,7 @@ def _md(html_str: str) -> None:
 
 
 MODE_BADGES = {
-    "mock": ('laya-mode-mock', 'Démo simulée'),
+    "mock": ('laya-mode-mock', 'Simulated Demo'),
     "laya": ('laya-mode-real', 'Laya (local)'),
     "jev": ('laya-mode-real', 'Jev (API TypeSafe)'),
 }
@@ -57,7 +57,7 @@ def render_latency(latency_ms: float, mode: str) -> None:
     _md(f"""
         <div class="laya-hero">
             <div class="laya-hero-value">{latency_ms:.1f}<span class="laya-hero-unit">ms</span></div>
-            <div class="laya-hero-sub">latence de la passe unique {badge}</div>
+            <div class="laya-hero-sub">single-pass latency {badge}</div>
         </div>
         """)
 
@@ -99,7 +99,7 @@ def render_choice(key: str, question: dict, answer: dict) -> None:
                 <span class="laya-type-badge laya-type-choice">▤ choice</span>
                 <span class="laya-card-title">{html.escape(question.get('instructions', key))}</span>
             </div>
-            <div class="laya-winner">Réponse : <b>{html.escape(str(winner))}</b>
+            <div class="laya-winner">Answer: <b>{html.escape(str(winner))}</b>
                 <span class="laya-winner-desc">{html.escape(str(desc))}</span>
             </div>
             {rows}
@@ -136,7 +136,7 @@ def render_score(key: str, question: dict, answer: dict) -> None:
                 <span class="laya-type-badge laya-type-score">↕ score</span>
                 <span class="laya-card-title">{html.escape(question.get('instructions', key))}</span>
             </div>
-            <div class="laya-winner">Niveau : <b>{html.escape(str(level_label))}</b></div>
+            <div class="laya-winner">Level: <b>{html.escape(str(level_label))}</b></div>
             <div class="laya-score-track">
                 <div class="laya-score-fill" style="width:{expected_norm*100:.1f}%;background:{SEQUENTIAL};"></div>
                 <div class="laya-score-marker" style="left:{expected_norm*100:.1f}%;"></div>
@@ -155,13 +155,13 @@ def render_noul(key: str, question: dict, answer: dict) -> None:
     p = max(0.0, min(1.0, p))
 
     if p < 0.33:
-        color, icon, word = STATUS["good"], "✓", "faible"
+        color, icon, word = STATUS["good"], "✓", "low"
     elif p < 0.5:
-        color, icon, word = STATUS["warning"], "⚠", "modérée"
+        color, icon, word = STATUS["warning"], "⚠", "moderate"
     elif p < 0.75:
-        color, icon, word = STATUS["serious"], "⚠", "élevée"
+        color, icon, word = STATUS["serious"], "⚠", "high"
     else:
-        color, icon, word = STATUS["critical"], "✕", "très élevée"
+        color, icon, word = STATUS["critical"], "✕", "very high"
 
     _md(f"""
         <div class="laya-card">
@@ -170,7 +170,7 @@ def render_noul(key: str, question: dict, answer: dict) -> None:
                 <span class="laya-card-title">{html.escape(question.get('instructions', key))}</span>
             </div>
             <div class="laya-winner">
-                <span style="color:{color};font-weight:700;">{icon} Probabilité {word}</span>
+                <span style="color:{color};font-weight:700;">{icon} Probability {word}</span>
                 — {p*100:.1f}%
             </div>
             <div class="laya-bar-track laya-noul-track">
@@ -199,5 +199,5 @@ def render_results(result: dict, questions: dict[str, Any], latency_ms: float, m
         answer = answers.get(key, {})
         render_answer(key, question, answer)
 
-    with st.expander("Réponse brute (JSON)"):
+    with st.expander("Raw response (JSON)"):
         st.json(result)

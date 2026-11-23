@@ -36,9 +36,9 @@ def test_run_yields_all_event_types():
     tools_cfg = load_tools_config(Path("config/tools.yaml"))
     jev = _make_jev()
     mistral = MagicMock()
-    mistral.synthesize.return_value = "La réponse est 42."
+    mistral.synthesize.return_value = "The answer is 42."
 
-    events = list(run("combien font 6*7", jev, mistral, skills, tools_cfg))
+    events = list(run("how much is 6*7", jev, mistral, skills, tools_cfg))
     types = {e.type for e in events}
     assert "skill_loaded" in types
     assert "tool_called" in types
@@ -51,8 +51,8 @@ def test_run_final_event_has_response():
     tools_cfg = load_tools_config(Path("config/tools.yaml"))
     jev = _make_jev()
     mistral = MagicMock()
-    mistral.synthesize.return_value = "Réponse finale."
+    mistral.synthesize.return_value = "Final answer."
 
     events = list(run("test", jev, mistral, skills, tools_cfg))
     final = next(e for e in events if e.type == "final")
-    assert final.data["response"] == "Réponse finale."
+    assert final.data["response"] == "Final answer."

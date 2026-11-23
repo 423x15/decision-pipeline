@@ -21,21 +21,21 @@ def decide(
     t0 = time.perf_counter()
     response = jev_client.system_one(
         state=(
-            f"Requête: {query}\n\n"
-            f"Résultats ({len(history)} tool(s)):\n{results_summary or '  (aucun)'}\n\n"
-            f"Itération: {iteration + 1}/{MAX_ITERATIONS}"
+            f"Query: {query}\n\n"
+            f"Results ({len(history)} tool(s)):\n{results_summary or '  (none)'}\n\n"
+            f"Iteration: {iteration + 1}/{MAX_ITERATIONS}"
         ),
         questions={
             "next": Choice(
-                instructions="Quelle est la prochaine étape pour répondre complètement à la requête ?",
+                instructions="What is the next step to fully answer the query?",
                 criteria={
-                    "call_another_tool": "Des informations manquent, le skill actuel a encore des tools utiles",
-                    "switch_skill": "Des informations manquent mais elles relèvent d'un autre domaine de compétence",
-                    "final_answer": "Les informations collectées sont suffisantes pour répondre",
+                    "call_another_tool": "Information is missing; the current skill has more useful tools",
+                    "switch_skill": "Information is missing but requires a different skill domain",
+                    "final_answer": "Collected information is sufficient to answer",
                 },
             ),
             "sufficient_info": Noul(
-                instructions="Les résultats permettent-ils une réponse complète et précise ?"
+                instructions="Do the results allow a complete and precise answer?"
             ),
         },
     )

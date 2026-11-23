@@ -11,7 +11,7 @@ from laya_client import LayaLoadError, detect_device, load_agent, run_mock_predi
 from scenarios import SCENARIO_ORDER, SCENARIOS
 from ui import render_results
 
-PROVIDERS = ["Démo simulée", "Laya (modèle local)", "Jev (API TypeSafe)"]
+PROVIDERS = ["Simulated Demo", "Laya (local model)", "Jev (TypeSafe API)"]
 
 
 def load_css() -> None:
@@ -23,10 +23,10 @@ def load_css() -> None:
 def parse_custom_questions(df: pd.DataFrame) -> dict:
     questions: dict = {}
     for _, row in df.iterrows():
-        key = str(row.get("clé") or "").strip()
+        key = str(row.get("key") or "").strip()
         qtype = str(row.get("type") or "").strip()
         instructions = str(row.get("instructions") or "").strip()
-        criteria_raw = str(row.get("critères") or "").strip()
+        criteria_raw = str(row.get("criteria") or "").strip()
         if not key or qtype not in {"choice", "score", "noul"}:
             continue
 
@@ -47,7 +47,7 @@ def parse_custom_questions(df: pd.DataFrame) -> dict:
 
         elif qtype == "score":
             levels = [x.strip() for x in criteria_raw.split(",") if x.strip()]
-            question["criteria"] = levels or ["bas", "moyen", "haut"]
+            question["criteria"] = levels or ["low", "medium", "high"]
 
         questions[key] = question
 
@@ -66,10 +66,10 @@ def questions_to_editor_df(questions: dict) -> pd.DataFrame:
             criteria_str = ""
         rows.append(
             {
-                "clé": key,
+                "key": key,
                 "type": q.get("type", "choice"),
                 "instructions": q.get("instructions", ""),
-                "critères": criteria_str,
+                "criteria": criteria_str,
             }
         )
     return pd.DataFrame(rows)
@@ -92,12 +92,12 @@ def main() -> None:
             <h1>🧠 Laya Playground</h1>
         </div>
         <div class="laya-header-sub">
-            Moteur de décisions typées — Laya (local, convaiinnovations/laya) ou Jev (API TypeSafe)
+            Typed decision engine — Laya (local, convaiinnovations/laya) or Jev (TypeSafe API)
         </div>
         <div class="laya-facts">
-            <span class="laya-fact">421M paramètres</span>
-            <span class="laya-fact">~33ms / passe unique</span>
-            <span class="laya-fact">100+ langues</span>
+            <span class="laya-fact">421M parameters</span>
+            <span class="laya-fact">~33ms / single pass</span>
+            <span class="laya-fact">100+ languages</span>
             <span class="laya-fact">Apache 2.0</span>
             <span class="laya-fact">choice · score · noul</span>
         </div>
@@ -110,25 +110,24 @@ def main() -> None:
     with st.sidebar:
         st.subheader("Provider")
         provider = st.radio(
-            "Source des réponses",
+            "Answer source",
             PROVIDERS,
             index=0,
             help=(
-                "Démo simulée : réponses factices, pour explorer l'interface sans rien "
-                "installer. Laya : modèle open-weights téléchargé et exécuté 100% en local. "
-                "Jev : API hébergée par TypeSafe — les données quittent ta machine et partent "
-                "vers leur cloud."
+                "Simulated Demo: fake responses, to explore the UI without installing anything. "
+                "Laya: open-weights model downloaded and run 100% locally. "
+                "Jev: API hosted by TypeSafe — data leaves your machine and goes to their cloud."
             ),
         )
 
         agent = None
         jev_client = None
 
-        if provider == "Laya (modèle local)":
+        if provider == "Laya (local model)":
             device = detect_device()
-            st.caption(f"Device détecté : `{device}`")
-            if st.button("Charger le modèle Laya", use_container_width=True):
-                with st.spinner("Chargement du modèle (peut télécharger ~421M paramètres au premier lancement)..."):
+            st.caption(f"Detected device: `{device}`")
+            if st.button("Load Laya model", use_container_width=True):
+                with st.spinner("Loading model (may download ~421M parameters on first run)..."):
                     try:
                         st.session_state["agent"] = load_agent()
                     except LayaLoadError as exc:
@@ -140,41 +139,41 @@ def main() -> None:
             agent = st.session_state.get("agent")
             load_error = st.session_state.get("agent_error")
             if agent is not None:
-                st.success("Modèle chargé.")
+                st.success("Model loaded.")
             elif load_error:
                 st.error(load_error)
             else:
-                st.info("Cliquez sur 'Charger le modèle Laya' avant de lancer une décision.")
+                st.info("Click 'Load Laya model' before running a decision.")
 
-        elif provider == "Jev (API TypeSafe)":
-            st.caption("⚠️ Appel réseau vers l'API hébergée de TypeSafe — pas local.")
+        elif provider == "Jev (TypeSafe API)":
+            st.caption("⚠️ Network call to TypeSafe's hosted API — not local.")
             api_key = st.text_input(
-                "Clé API TypeSafe",
+                "TypeSafe API key",
                 value=default_api_key(),
                 type="password",
-                help="Créée sur console.typesafe.ai, ou exportée en variable d'environnement TYPESAFE_API_KEY.",
+                help="Created at console.typesafe.ai, or set as TYPESAFE_API_KEY environment variable.",
             )
             if api_key:
                 try:
                     jev_client = get_jev_client(api_key)
-                    st.success("Client Jev prêt.")
+                    st.success("Jev client ready.")
                 except JevError as exc:
                     jev_client = None
                     st.error(str(exc))
             else:
-                st.info("Renseigne ta clé API pour activer Jev.")
+                st.info("Enter your API key to enable Jev.")
 
         st.divider()
-        st.subheader("Scénario")
-        scenario_name = st.selectbox("Choisir un scénario", SCENARIO_ORDER)
+        st.subheader("Scenario")
+        scenario_name = st.selectbox("Choose a scenario", SCENARIO_ORDER)
         st.caption(SCENARIOS[scenario_name]["description"])
 
         st.divider()
         if st.session_state["history"]:
-            st.subheader("Historique")
+            st.subheader("History")
             hist_df = pd.DataFrame(st.session_state["history"])
             st.dataframe(hist_df, use_container_width=True, hide_index=True)
-            if st.button("Vider l'historique", use_container_width=True):
+            if st.button("Clear history", use_container_width=True):
                 st.session_state["history"] = []
                 st.rerun()
 
@@ -183,7 +182,7 @@ def main() -> None:
     col_left, col_right = st.columns([1, 1], gap="large")
 
     with col_left:
-        st.markdown("#### État à évaluer")
+        st.markdown("#### State to evaluate")
         state_text = st.text_area(
             "state",
             value=scenario["state"],
@@ -191,8 +190,8 @@ def main() -> None:
             label_visibility="collapsed",
         )
 
-        st.markdown("#### Questions typées")
-        if scenario_name == "Personnalisé":
+        st.markdown("#### Typed questions")
+        if scenario_name == "Custom":
             editor_df = questions_to_editor_df(scenario["questions"])
             edited_df = st.data_editor(
                 editor_df,
@@ -202,9 +201,9 @@ def main() -> None:
                     "type": st.column_config.SelectboxColumn(
                         "type", options=["choice", "score", "noul"], required=True
                     ),
-                    "critères": st.column_config.TextColumn(
-                        "critères",
-                        help="choice: label:description, label:description | score: niveau1, niveau2, niveau3",
+                    "criteria": st.column_config.TextColumn(
+                        "criteria",
+                        help="choice: label:description, label:description | score: level1, level2, level3",
                     ),
                 },
             )
@@ -216,31 +215,31 @@ def main() -> None:
                 extra = f" — {criteria}" if criteria else ""
                 st.markdown(f"- **{key}** (`{q['type']}`) : {q['instructions']}{extra}")
 
-        run_clicked = st.button("▶ Lancer la décision", type="primary", use_container_width=True)
+        run_clicked = st.button("▶ Run decision", type="primary", use_container_width=True)
 
     with col_right:
-        st.markdown("#### Résultat")
+        st.markdown("#### Result")
         if run_clicked:
             if not questions:
-                st.warning("Ajoutez au moins une question typée avant de lancer la décision.")
+                st.warning("Add at least one typed question before running the decision.")
                 run_result = None
-            elif provider == "Démo simulée":
+            elif provider == "Simulated Demo":
                 run_result = ("mock", *run_mock_predict(state_text, questions))
-            elif provider == "Laya (modèle local)":
+            elif provider == "Laya (local model)":
                 if agent is None:
-                    st.warning("Chargez d'abord le modèle Laya depuis la barre latérale.")
+                    st.warning("Load the Laya model from the sidebar first.")
                     run_result = None
                 else:
                     try:
                         result, latency_ms = run_real_predict(agent, state_text, questions)
                     except Exception as exc:  # noqa: BLE001
-                        st.error(f"Erreur pendant l'inférence : {exc}")
+                        st.error(f"Inference error: {exc}")
                         run_result = None
                     else:
                         run_result = ("laya", result, latency_ms)
-            else:  # Jev (API TypeSafe)
+            else:  # Jev (TypeSafe API)
                 if jev_client is None:
-                    st.warning("Renseigne une clé API valide dans la barre latérale.")
+                    st.warning("Enter a valid API key in the sidebar.")
                     run_result = None
                 else:
                     try:
@@ -257,14 +256,14 @@ def main() -> None:
                 st.session_state["history"].insert(
                     0,
                     {
-                        "heure": datetime.now().strftime("%H:%M:%S"),
-                        "scénario": scenario_name,
+                        "time": datetime.now().strftime("%H:%M:%S"),
+                        "scenario": scenario_name,
                         "provider": mode,
-                        "latence_ms": round(latency_ms, 1),
+                        "latency_ms": round(latency_ms, 1),
                     },
                 )
         else:
-            st.info("Configurez l'état et les questions à gauche, puis lancez la décision.")
+            st.info("Configure the state and questions on the left, then run the decision.")
 
 
 if __name__ == "__main__":

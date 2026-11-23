@@ -64,14 +64,14 @@ def _plan(query: str, skills_config: list[dict],
             {
                 "role": "system",
                 "content": (
-                    "Tu es un agent de planification. "
-                    "Décompose la requête en étapes concrètes.\n"
-                    "Pour chaque étape, indique quel skill utiliser.\n\n"
-                    f"Skills disponibles:\n{skill_desc}\n\n"
-                    "Réponds UNIQUEMENT en JSON:\n"
+                    "You are a planning agent. "
+                    "Break down the request into concrete steps.\n"
+                    "For each step, specify which skill to use.\n\n"
+                    f"Available skills:\n{skill_desc}\n\n"
+                    "Reply ONLY in JSON:\n"
                     '{"steps": [{"goal": "...", "skill": "<skill_name>", '
-                    '"reasoning": "pourquoi ce skill"}, ...]}\n\n'
-                    f"Noms de skills valides: {skill_names}"
+                    '"reasoning": "why this skill"}, ...]}\n\n'
+                    f"Valid skill names: {skill_names}"
                 ),
             },
             {"role": "user", "content": query},
@@ -137,7 +137,7 @@ def run(
 
         prior = ""
         if step_results:
-            prior = "\n\nRésultats des étapes précédentes:\n" + "\n".join(
+            prior = "\n\nPrevious step results:\n" + "\n".join(
                 f"  [{r['step'][:40]}] {r['tool']}: {str(r['result'])[:120]}"
                 for r in step_results
             )
@@ -146,10 +146,10 @@ def run(
             {
                 "role": "system",
                 "content": (
-                    f"Tu travailles sur l'étape {step_idx + 1}/{len(steps)}: {goal}\n"
-                    f"Requête originale: {query}{prior}\n\n"
-                    "Raisonne à voix haute si nécessaire, puis appelle le tool approprié. "
-                    "Si aucun tool n'est nécessaire, réponds directement."
+                    f"You are working on step {step_idx + 1}/{len(steps)}: {goal}\n"
+                    f"Original query: {query}{prior}\n\n"
+                    "Think aloud if needed, then call the appropriate tool. "
+                    "If no tool is needed, answer directly."
                 ),
             },
             {"role": "user", "content": goal},
@@ -184,7 +184,7 @@ def run(
 
                 t1 = time.perf_counter()
                 tool_fn = TOOL_REGISTRY.get(tc.name)
-                result = tool_fn(tool_input, all_history) if tool_fn else f"Tool '{tc.name}' introuvable."
+                result = tool_fn(tool_input, all_history) if tool_fn else f"Tool '{tc.name}' not found."
                 tool_lat = (time.perf_counter() - t1) * 1000
 
                 all_history.append({"tool": tc.name, "input": tool_input, "result": result})
@@ -212,8 +212,8 @@ def run(
     context = "\n".join(
         f"  - {r['tool']}({r['step'][:40]}) → {str(r['result'])[:120]}"
         for r in step_results
-    ) or "Aucun tool appelé."
-    llm_prompt = f"Question: {query}\n\nInformations collectées:\n{context}\n\nRéponds de manière concise."
+    ) or "No tools were called."
+    llm_prompt = f"Question: {query}\n\nCollected information:\n{context}\n\nAnswer concisely."
 
     t0 = time.perf_counter()
     final_resp = provider.chat([{"role": "user", "content": llm_prompt}])

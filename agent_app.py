@@ -33,7 +33,7 @@ def _fmt_event(event: PipelineEvent) -> str:
     if event.type == "plan":
         steps = event.data.get("steps", [])
         goals = " → ".join(s.get("goal", "?")[:30] for s in steps)
-        return f"📋 Plan ({len(steps)} étapes) {lat}  _{goals}_"
+        return f"📋 Plan ({len(steps)} steps) {lat}  _{goals}_"
     if event.type == "skill_loaded":
         tools = ", ".join(event.data.get("tools", [])) or "—"
         prefix = "🔀 switch →" if event.data.get("switched") else "📦 load →"
@@ -54,7 +54,7 @@ def _fmt_event(event: PipelineEvent) -> str:
     if event.type == "low_confidence":
         step = event.data.get("step", "")
         choice = event.data.get("original_choice", "?")
-        return f"⚠️ Confiance faible {conf} → fallback étape {step} (ignoré: {choice})"
+        return f"⚠️ Low confidence {conf} → fallback at step {step} (skipped: {choice})"
     if event.type == "final":
         return f"📝 LLM synthesis {lat}"
     return f"• {event.type} {lat}"
@@ -93,7 +93,7 @@ def render_chat(
 ):
     with st.sidebar:
         st.subheader("Conversations")
-        if st.button("➕ Nouvelle", width="stretch"):
+        if st.button("➕ New", width="stretch"):
             st.session_state["active_conv_id"] = None
             st.rerun()
         for conv in db.list_conversations():
@@ -121,23 +121,23 @@ def render_chat(
                         for item in msg["tool_trace"]:
                             e = PipelineEvent(**item)
                             if e.type == "tool_called":
-                                with st.expander(f"📥 {e.data.get('tool')} — I/O complet", expanded=False):
+                                with st.expander(f"📥 {e.data.get('tool')} — full I/O", expanded=False):
                                     st.markdown("**Input**")
                                     st.code(e.data.get("input", ""), language="text")
-                                    st.markdown("**Résultat**")
+                                    st.markdown("**Result**")
                                     st.code(str(e.data.get("result", "")), language="text")
                             if e.type == "final" and e.data.get("llm_prompt"):
-                                with st.expander("📤 Prompt envoyé au LLM", expanded=False):
+                                with st.expander("📤 Prompt sent to LLM", expanded=False):
                                     st.code(e.data["llm_prompt"], language="text")
 
-    user_input = st.chat_input("Posez votre question...")
+    user_input = st.chat_input("Ask a question...")
     if not user_input:
         return
     if not use_native and not use_reasoning and not jev_client:
-        st.error("TYPESAFE_API_KEY manquante dans .env")
+        st.error("TYPESAFE_API_KEY missing — add it to .env")
         return
     if not provider:
-        st.error("OPENAI_API_KEY (ou ANTHROPIC_API_KEY) manquante dans .env")
+        st.error("MISTRAL_API_KEY (or OPENAI_API_KEY / ANTHROPIC_API_KEY) missing — add it to .env")
         return
 
     if not conv_id:
@@ -196,13 +196,13 @@ def render_chat(
                 st.markdown(f"`{line}`")
             for e in events:
                 if e.type == "tool_called":
-                    with st.expander(f"📥 {e.data.get('tool')} — I/O complet", expanded=False):
+                    with st.expander(f"📥 {e.data.get('tool')} — full I/O", expanded=False):
                         st.markdown("**Input**")
                         st.code(e.data.get("input", ""), language="text")
-                        st.markdown("**Résultat**")
+                        st.markdown("**Result**")
                         st.code(str(e.data.get("result", "")), language="text")
                 if e.type == "final" and e.data.get("llm_prompt"):
-                    with st.expander("📤 Prompt envoyé au LLM", expanded=False):
+                    with st.expander("📤 Prompt sent to LLM", expanded=False):
                         st.code(e.data["llm_prompt"], language="text")
 
     trace_dicts = [
@@ -217,7 +217,7 @@ def render_chat(
 # ── Tab: Skills & Tools ───────────────────────────────────────────────────────
 
 def render_skills_tools(skills_config, tools_config):
-    st.subheader("Skills actifs")
+    st.subheader("Active Skills")
     st.dataframe(pd.DataFrame([
         {"Skill": s["name"], "Description": s["description"],
          "Tools": ", ".join(s["tools"]) if s["tools"] else "—"}
@@ -225,7 +225,7 @@ def render_skills_tools(skills_config, tools_config):
     ]), hide_index=True)
 
     st.divider()
-    st.subheader("Tools disponibles")
+    st.subheader("Available Tools")
     st.dataframe(pd.DataFrame([
         {"Tool": name, "Description": meta["description"], "Input hint": meta.get("input_hint", "")}
         for name, meta in tools_config.items()
@@ -236,16 +236,16 @@ def render_skills_tools(skills_config, tools_config):
     with col1:
         st.subheader("skills.yaml")
         content = SKILLS_YAML.read_text() if SKILLS_YAML.exists() else ""
-        new_content = st.text_area("Éditer", value=content, height=250, key="skills_editor")
-        if st.button("💾 Sauvegarder skills.yaml"):
+        new_content = st.text_area("Edit", value=content, height=250, key="skills_editor")
+        if st.button("💾 Save skills.yaml"):
             SKILLS_YAML.write_text(new_content)
             st.cache_resource.clear()
             st.rerun()
     with col2:
         st.subheader("tools.yaml")
         content = TOOLS_YAML.read_text() if TOOLS_YAML.exists() else ""
-        new_content = st.text_area("Éditer", value=content, height=250, key="tools_editor")
-        if st.button("💾 Sauvegarder tools.yaml"):
+        new_content = st.text_area("Edit", value=content, height=250, key="tools_editor")
+        if st.button("💾 Save tools.yaml"):
             TOOLS_YAML.write_text(new_content)
             st.cache_resource.clear()
             st.rerun()
@@ -254,19 +254,19 @@ def render_skills_tools(skills_config, tools_config):
 # ── Tab: Config & Debug ───────────────────────────────────────────────────────
 
 def render_debug():
-    st.subheader("Variables d'environnement")
-    for key in ["TYPESAFE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
+    st.subheader("Environment Variables")
+    for key in ["MISTRAL_API_KEY", "TYPESAFE_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
                 "LLM_PROVIDER", "LLM_MODEL"]:
         val = os.environ.get(key, "")
-        status = "✅ définie" if val else "❌ manquante"
+        status = "✅ set" if val else "❌ missing"
         masked = (val[:4] + "****" + val[-4:]) if len(val) > 8 else "****"
         st.text(f"{key}: {status}  {masked if val else ''}")
 
     st.divider()
-    st.subheader("agent_config.yaml — paramètres de l'agent")
+    st.subheader("agent_config.yaml — agent parameters")
     content = CONFIG_PATH.read_text() if CONFIG_PATH.exists() else ""
-    new_content = st.text_area("Éditer", value=content, height=300, key="agent_config_editor")
-    if st.button("💾 Sauvegarder agent_config.yaml"):
+    new_content = st.text_area("Edit", value=content, height=300, key="agent_config_editor")
+    if st.button("💾 Save agent_config.yaml"):
         CONFIG_PATH.write_text(new_content)
         st.cache_resource.clear()
         st.rerun()
@@ -274,10 +274,10 @@ def render_debug():
     st.divider()
     decisions = st.session_state.get("session_decisions", [])
     if not decisions:
-        st.info("Lance une requête depuis Chat pour voir les décisions ici.")
+        st.info("Run a query from Chat to see JEV decisions here.")
         return
     df = pd.DataFrame(decisions)
-    st.subheader("Décisions JEV — session")
+    st.subheader("JEV Decisions — session")
     st.dataframe(df, hide_index=True)
     if "tool" in df.columns:
         counts = df[df["type"] == "tool_called"]["tool"].value_counts()
@@ -288,52 +288,52 @@ def render_debug():
 # ── Tab: Guide ────────────────────────────────────────────────────────────────
 
 def render_guide():
-    st.subheader("Créer un nouveau Skill + ses Tools")
+    st.subheader("Adding a new Skill + Tools")
     st.markdown("""
-Un **skill** est un bundle de tools qu'JEV active selon la nature de la requête.
-Un **tool** est une fonction Python `run(query, history) -> str` enregistrée dans le pipeline.
+A **skill** is a bundle of tools that JEV activates based on the query type.
+A **tool** is a Python function `run(query, history) -> str` registered in the pipeline.
 
 ---
 
-### Exemple complet : Skill Finance
+### Full example: Finance Skill
 """)
 
     col1, col2 = st.columns(2)
     with col1:
-        st.markdown("#### 1. `config/skills.yaml` — déclarer le skill")
+        st.markdown("#### 1. `config/skills.yaml` — declare the skill")
         st.code("""skills:
-  # ... skills existants ...
+  # ... existing skills ...
   - name: finance_skills
     description: >
-      Analyse financière, valorisation d'entreprise,
-      calcul DCF, ratios boursiers, rendement dividendes
+      Financial analysis, company valuation,
+      DCF calculation, stock ratios, dividend yield
     tools:
       - dcf_valuation
       - financial_ratios
       - dividend_yield""", language="yaml")
 
-        st.markdown("#### 2. `config/tools.yaml` — décrire les tools")
+        st.markdown("#### 2. `config/tools.yaml` — describe the tools")
         st.code("""tools:
   dcf_valuation:
     description: >
-      Calcule la valeur intrinsèque d'une action par DCF
-      (flux de trésorerie actualisés).
-    input_hint: "free cash flow, taux croissance, taux actualisation"
+      Computes intrinsic stock value via DCF
+      (discounted cash flows).
+    input_hint: "free cash flow, growth rate, discount rate"
 
   financial_ratios:
-    description: Calcule P/E, P/B, EV/EBITDA et autres ratios boursiers.
-    input_hint: "question sur les ratios d'une action ou secteur"
+    description: Computes P/E, P/B, EV/EBITDA and other stock ratios.
+    input_hint: "question about ratios for a stock or sector"
 
   dividend_yield:
-    description: Calcule le rendement dividende et le taux de distribution.
-    input_hint: "dividende annuel et prix de l'action" """, language="yaml")
+    description: Computes dividend yield and payout ratio.
+    input_hint: "annual dividend and stock price" """, language="yaml")
 
     with col2:
         st.markdown("#### 3. `agent/tools/dcf_valuation.py`")
         st.code("""def run(query: str, history: list[dict]) -> str:
     fcf = _extract_number(query, "FCF", default=100)
-    growth = _extract_number(query, "croissance", default=0.05)
-    discount = _extract_number(query, "actualisation", default=0.10)
+    growth = _extract_number(query, "growth", default=0.05)
+    discount = _extract_number(query, "discount", default=0.10)
     terminal_growth = 0.02
     years = 5
     total_pv = sum(
@@ -346,8 +346,8 @@ Un **tool** est une fonction Python `run(query, history) -> str` enregistrée da
         / (1 + discount)**years
     )
     return (
-        f"Valeur intrinsèque (DCF) : {total_pv + terminal_pv:.0f}M€\\n"
-        f"  FCF base: {fcf}M€ | Croissance: {growth*100:.1f}%"
+        f"Intrinsic value (DCF): {total_pv + terminal_pv:.0f}M\\n"
+        f"  Base FCF: {fcf}M | Growth: {growth*100:.1f}%"
     )
 
 def _extract_number(text, keyword, default):
@@ -357,13 +357,13 @@ def _extract_number(text, keyword, default):
     return float(m.group(1).replace(",", ".")) if m else default""",
                 language="python")
 
-        st.markdown("#### 4. `agent/tools/__init__.py` — enregistrer")
+        st.markdown("#### 4. `agent/tools/__init__.py` — register")
         st.code("""from agent.tools import (
     calculator, datetime_tool, web_search,
     text_utils,
-    dcf_valuation,        # ← ajouter
-    financial_ratios,     # ← ajouter
-    dividend_yield,       # ← ajouter
+    dcf_valuation,        # ← add
+    financial_ratios,     # ← add
+    dividend_yield,       # ← add
 )
 
 TOOL_REGISTRY = {
@@ -375,19 +375,19 @@ TOOL_REGISTRY = {
 
     st.divider()
     st.markdown("""
-| Étape | Fichier | Action |
-|-------|---------|--------|
-| 1 | `config/skills.yaml` | Ajouter le skill + liste des tools |
-| 2 | `config/tools.yaml` | Décrire chaque tool (description précise pour JEV) |
-| 3 | `agent/tools/mon_tool.py` | Implémenter `run(query, history) -> str` |
-| 4 | `agent/tools/__init__.py` | Import + entrée dans `TOOL_REGISTRY` |
-| 5 | `tests/test_mon_tool.py` | Au moins `test_run_returns_string` |
-| 6 | UI → 🛠 Skills & Tools | Vérifier que le skill apparaît |
-| 7 | UI → 💬 Chat | Tester avec une vraie question |
+| Step | File | Action |
+|------|------|--------|
+| 1 | `config/skills.yaml` | Add skill + tool list |
+| 2 | `config/tools.yaml` | Describe each tool (precise description for JEV routing) |
+| 3 | `agent/tools/my_tool.py` | Implement `run(query, history) -> str` |
+| 4 | `agent/tools/__init__.py` | Import + entry in `TOOL_REGISTRY` |
+| 5 | `tests/test_my_tool.py` | At least `test_run_returns_string` |
+| 6 | UI → 🛠 Skills & Tools | Verify the skill appears |
+| 7 | UI → 💬 Chat | Test with a real query |
 """)
     st.info(
-        "💡 **Tip JEV** — La `description` dans `skills.yaml` et `tools.yaml` est le seul signal "
-        "que JEV utilise pour router. Plus elle est précise et distinctive, meilleur est le routing."
+        "💡 **JEV Tip** — The `description` in `skills.yaml` and `tools.yaml` is the only signal "
+        "JEV uses for routing. The more precise and distinctive it is, the better the routing."
     )
 
 
@@ -400,33 +400,33 @@ def main():
         if key not in st.session_state:
             st.session_state[key] = val
 
-    st.title("🤖 Agent Pipeline")
+    st.title("🤖 Agent Pipeline — Mistral × JEV")
 
     cfg = get_agent_config()
 
     # ── Sidebar controls ──────────────────────────────────────────────────────
     confidence_threshold = st.sidebar.slider(
-        "Seuil de confiance JEV",
+        "JEV confidence threshold",
         min_value=0.0, max_value=1.0,
         value=cfg.pipeline_confidence_threshold, step=0.05,
-        help="Si JEV est moins sûr que ce seuil, sa décision est ignorée (fallback safe).",
+        help="If JEV is less confident than this threshold, its decision is ignored (safe fallback).",
     )
     engine_mode = st.sidebar.radio(
-        "Moteur de décision",
-        ["🧠 JEV (TypeSafe)", "⚡ OpenAI natif (tool use)", "🔬 ReAct Planning (transparent)"],
+        "Decision engine",
+        ["🧠 JEV (TypeSafe)", "⚡ LLM native (tool use)", "🔬 ReAct Planning (transparent)"],
         help=(
-            "**JEV** : classificateur rapide (50–150ms), skills en bundles, confiance calibrée.\n\n"
-            "**OpenAI natif** : LLM choisit ses tools seul, tout en contexte, opaque.\n\n"
-            "**ReAct Planning** : LLM planifie d'abord (todo list visible), "
-            "charge/décharge les skills par étape, raisonnement visible."
+            "**JEV**: fast classifier (50–150ms), skill bundles, calibrated confidence.\n\n"
+            "**LLM native**: LLM chooses its own tools, full context, opaque.\n\n"
+            "**ReAct Planning**: LLM plans first (visible todo list), "
+            "loads/unloads skills per step, reasoning visible."
         ),
     )
     use_native = engine_mode.startswith("⚡")
     use_reasoning = engine_mode.startswith("🔬")
     st.sidebar.caption(
-        "🔬 Plan → skills isolés → reasoning visible"
+        "🔬 Plan → isolated skills → visible reasoning"
         if use_reasoning else
-        ("⚡ OpenAI décide tout" if use_native else "🧠 JEV route · LLM synthétise")
+        ("⚡ LLM decides everything" if use_native else "🧠 JEV routes · Mistral synthesizes")
     )
 
     # ── Client init ───────────────────────────────────────────────────────────
@@ -442,10 +442,10 @@ def main():
     except ValueError:
         pass  # missing API key — shown as error in chat
 
-    openai_key = os.environ.get("OPENAI_API_KEY", "")
-    if openai_key:
+    mistral_key = os.environ.get("MISTRAL_API_KEY", "")
+    if mistral_key:
         try:
-            mistral_client = MistralClient(api_key=openai_key)
+            mistral_client = MistralClient(api_key=mistral_key)
         except Exception:
             pass
 
@@ -462,7 +462,7 @@ def main():
 
     # ── Tabs ──────────────────────────────────────────────────────────────────
     tab_chat, tab_skills, tab_debug, tab_guide = st.tabs(
-        ["💬 Chat", "🛠 Skills & Tools", "⚙️ Config & Debug", "📖 Guide"]
+        ["💬 Chat", "🛠 Skills & Tools", "⚙️ Config & Debug", "📖 How to extend"]
     )
     with tab_chat:
         render_chat(

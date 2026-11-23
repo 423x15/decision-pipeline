@@ -17,7 +17,7 @@ def _safe_eval(node: ast.AST) -> float:
         return _SAFE_OPS[type(node.op)](_safe_eval(node.left), _safe_eval(node.right))
     if isinstance(node, ast.UnaryOp) and type(node.op) in _SAFE_OPS:
         return _SAFE_OPS[type(node.op)](_safe_eval(node.operand))
-    raise ValueError(f"Opération non supportée: {ast.dump(node)}")
+    raise ValueError(f"Unsupported operation: {ast.dump(node)}")
 
 def _extract_expression(query: str) -> str | None:
     matches = re.findall(r"[\d\s\+\-\*\/\(\)\.\^]+", query)
@@ -30,7 +30,7 @@ def _extract_expression(query: str) -> str | None:
 def run(query: str, history: list[dict]) -> str:
     expr = _extract_expression(query)
     if not expr:
-        return "Aucune expression mathématique trouvée dans la requête."
+        return "No mathematical expression found in the query."
     try:
         tree = ast.parse(expr.replace("^", "**"), mode="eval")
         result = _safe_eval(tree.body)
@@ -38,4 +38,4 @@ def run(query: str, history: list[dict]) -> str:
             return f"{expr.strip()} = {int(result)}"
         return f"{expr.strip()} = {result:.6g}"
     except Exception as exc:
-        return f"Erreur d'évaluation de '{expr}': {exc}"
+        return f"Evaluation error for '{expr}': {exc}"

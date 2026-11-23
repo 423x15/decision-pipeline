@@ -21,13 +21,13 @@ def select_skill(
     context = ""
     if history:
         done = ", ".join(dict.fromkeys(h["tool"] for h in history))
-        context = f"\nTools déjà appelés: {done} — cherche un skill couvrant ce qui manque encore."
+        context = f"\nAlready called tools: {done} — find a skill covering what is still missing."
     t0 = time.perf_counter()
     response = jev_client.system_one(
-        state=f"Requête utilisateur: {query}{context}\nSkills disponibles: {', '.join(criteria)}",
+        state=f"User query: {query}{context}\nAvailable skills: {', '.join(criteria)}",
         questions={
             "skill": Choice(
-                instructions="Quel skill bundle correspond le mieux à cette requête ?",
+                instructions="Which skill bundle best matches this query?",
                 criteria=criteria,
             )
         },

@@ -6,12 +6,12 @@ pipeline:
   confidence_threshold: 0.80 # JEV decisions below this threshold fall back to safe default
 
 native_engine:
-  max_iterations: 10         # Max agentic loops in OpenAI native tool-use mode
+  max_iterations: 10         # Max agentic loops in LLM native tool-use mode
 
 reasoning_engine:
   max_steps: 6               # Max planning steps in ReAct mode
   max_tool_calls_per_step: 3 # Max tool calls per planning step
 
 llm:
-  provider: openai           # "openai" | "anthropic" — overridden by LLM_PROVIDER env var
-  model: gpt-4o-mini         # Model name — overridden by LLM_MODEL env var
+  provider: mistral           # "mistral" | "openai" | "anthropic" — overridden by LLM_PROVIDER env var
+  model: mistral-small-latest # Model name — overridden by LLM_MODEL env var

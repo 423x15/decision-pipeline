@@ -1,97 +1,119 @@
-# Laya Playground
+# JEV Agent — Mistral × TypeSafe Decision Pipeline
 
-Petit dashboard Streamlit pour explorer des moteurs de décision **typée**
-(`choice` / `score` / `noul` → probabilités calibrées, pas de génération de
-texte). Deux providers interchangeables derrière la même interface :
+A transparent, multi-engine agent framework that combines **Mistral** for language synthesis with **JEV** (TypeSafe) for fast, calibrated decision-making. Built as a Streamlit playground to compare three distinct agentic architectures side by side.
 
-- **[Laya](https://huggingface.co/convaiinnovations/laya)** (convaiinnovations) — open-weights, 421M params, tourne 100% en local
-- **[Jev](https://typesafe.ai)** (TypeSafe) — API hébergée, mêmes primitives (`Choice`/`Score`/`Noul`)
+## What makes this interesting
 
-## Démarrage rapide (mode démo, sans rien installer côté modèle)
+Most LLM agents are opaque black boxes: the model decides which tools to call, in what order, and when to stop — all hidden inside a single API call. This project makes every step visible and **swappable at runtime**:
 
-```bash
-python -m venv .venv && source .venv/bin/activate   # optionnel
-pip install streamlit pandas
-streamlit run app.py
+| Engine | How it works | Latency profile |
+|--------|-------------|-----------------|
+| **JEV Pipeline** | TypeSafe's typed classifier routes to skill bundles (50–150ms), Mistral synthesizes | Ultra-fast routing, Mistral only for synthesis |
+| **LLM Native** | Mistral picks its own tools via function calling, no external router | Single LLM loop, fully autonomous |
+| **ReAct Planning** | Mistral plans a todo list first, then executes step-by-step with isolated skill contexts | Most transparent, best for complex multi-step tasks |
+
+## Architecture
+
+```
+User query
+    │
+    ├─► [JEV Pipeline mode]
+    │       JEV (TypeSafe) ──► select skill bundle
+    │       JEV (TypeSafe) ──► select tool within bundle
+    │       Python tool ──────► execute
+    │       JEV (TypeSafe) ──► decide: call more tools / switch skill / synthesize
+    │       Mistral ──────────► synthesize final answer
+    │
+    ├─► [LLM Native mode]
+    │       Mistral (function calling) ──► pick & call tools autonomously
+    │       Mistral ──────────────────────► stop when done
+    │
+    └─► [ReAct Planning mode]
+            Mistral ──► produce step-by-step plan (JSON)
+            For each step:
+                load only that step's skill tools
+                Mistral ──► reason + call tools
+                unload skill context
+            Mistral ──► synthesize from all step results
 ```
 
-Ouvre `http://localhost:8501`, laisse **"Démo simulée"** sélectionné dans la
-barre latérale, choisis un scénario (triage support, modération de contenu,
-routage de modèle LLM...) et clique sur **Lancer la décision**. Les réponses
-sont simulées (déterministes, basées sur le texte saisi) pour explorer
-l'interface immédiatement.
+The key insight: **JEV handles routing decisions at ~100ms with calibrated confidence scores**, while Mistral handles open-ended language tasks. This separates concerns cleanly and makes routing auditable.
 
-## Utiliser Laya (local)
+## Quick start
 
 ```bash
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Dans la barre latérale, passe sur **"Laya (modèle local)"** et clique sur
-**Charger le modèle Laya**. Le premier chargement télécharge les poids depuis
-Hugging Face (~421M paramètres) — connexion internet nécessaire à ce
-moment-là seulement. Ensuite le modèle tourne 100% en local (CPU ou GPU si
-dispo). Si le chargement semble bloqué : `USE_TF=0 streamlit run app.py`.
-
-## Utiliser Jev (API TypeSafe)
-
+Create a `.env` file:
 ```bash
-pip install typesafe-sdk   # déjà inclus dans requirements.txt
+MISTRAL_API_KEY=your_key_here
+TYPESAFE_API_KEY=your_key_here   # only needed for JEV Pipeline mode
 ```
 
-Crée une clé API sur [console.typesafe.ai](https://console.typesafe.ai/),
-puis dans la barre latérale passe sur **"Jev (API TypeSafe)"** et colle la
-clé (ou exporte `TYPESAFE_API_KEY` avant de lancer Streamlit).
+Run the agent UI:
+```bash
+streamlit run agent_app.py
+```
 
-⚠️ **Contrairement à Laya, ce mode envoie l'état et les questions au cloud de
-TypeSafe** — ce n'est plus local. Ne l'utilise pas avec des données
-sensibles/clients réelles sans avoir vérifié leurs conditions de traitement
-des données.
+Or run the original Laya/JEV decision demo:
+```bash
+streamlit run app.py
+```
 
-## Ce que fait l'appli
+## Skills & Tools
 
-- 4 scénarios prêts à l'emploi (triage support, modération, routage LLM) +
-  un mode **Personnalisé** où tu édites toi-même les questions (clé, type
-  `choice`/`score`/`noul`, instructions, critères) dans un tableau éditable.
-- Visualisation dédiée par type de question, identique quel que soit le provider :
-  - `choice` → barres de probabilité par option, gagnant mis en valeur
-  - `score` → jauge/curseur sur l'échelle ordinale définie
-  - `noul` → jauge de probabilité calibrée (vert → jaune → rouge)
-- Latence de la passe d'inférence affichée en gros.
-- Historique des runs (avec le provider utilisé) dans la barre latérale.
-- Réponse JSON brute disponible dans un expander pour debug.
+Skills are **named bundles of tools** that JEV activates based on query classification. The routing descriptions live in YAML — no code changes needed to add a new domain.
 
-## Note sur le format exact des réponses
+```
+config/
+  skills.yaml     ← skill bundles + their tool lists
+  tools.yaml      ← tool descriptions (used by JEV for routing)
+  agent_config.yaml ← engine parameters
 
-- **Jev** : le format de requête (`Choice`/`Score`/`Noul`, `state`/`questions`)
-  et les champs de réponse (`.choice`, `.score`, `.noul`) viennent de la doc
-  officielle SDK Python (`docs.typesafe.ai/sdk/python`) — fiable.
-- **Laya** : le champ exact renvoyé par `agent.predict(...)` (ex.
-  `probabilities` vs `scores` vs `distribution`) a été reconstitué à partir
-  de la description du package sur PyPI, faute d'accès direct à
-  `huggingface.co` depuis l'environnement où ce projet a été créé — à
-  vérifier une fois le vrai modèle chargé.
+agent/tools/
+  calculator.py   ← math expressions
+  datetime_tool.py ← date/time queries
+  web_search.py   ← web search (stub)
+  text_utils.py   ← text analysis
+```
 
-Dans les deux cas, `ui.py` essaie plusieurs noms de clés courants et affiche
-toujours le JSON brut en repli (expander "Réponse brute (JSON)") — si un
-champ ne s'affiche pas correctement, regarde la structure dedans et ajuste
-`_get_first(...)` dans `ui.py` en conséquence (une seule ligne par type de
-question).
+### Adding a new skill in 4 steps
 
-## ⚠️ Sur la qualité réelle des modèles
+1. **`config/skills.yaml`** — declare the skill and its tools
+2. **`config/tools.yaml`** — describe each tool (JEV uses this for routing)
+3. **`agent/tools/my_tool.py`** — implement `run(query, history) -> str`
+4. **`agent/tools/__init__.py`** — register in `TOOL_REGISTRY`
 
-D'après les benchmarks disponibles publiquement, **Laya en zero-shot (poids
-tels que téléchargés) a un accuracy plus faible qu'un baseline "toujours
-répondre la classe majoritaire"** sur son propre benchmark — il faut le
-fine-tuner sur ton domaine pour qu'il devienne réellement utile (voir le
-notebook Kaggle du repo `NandhaKishorM/laya`). Jev fait mieux mais reste, sur
-son propre benchmark, en dessous de LLMs généralistes utilisés simplement en
-zero-shot. L'argument de vente des deux est la **latence/coût**, pas une
-meilleure qualité de décision — ne fais pas confiance aux chiffres par défaut
-sans les valider toi-même sur tes propres cas.
+The UI's **Skills & Tools** tab shows active skills live, and the **How to extend** tab walks through a full Finance skill example.
 
-## Ressources
+## LLM providers
 
-- Modèle : https://huggingface.co/convaiinnovations/laya
-- Démo officielle (Space) : https://huggingface.co/spaces/convaiinnovations/laya-demo
-- Package : https://pypi.org/project/laya/
+The `LLM_PROVIDER` env var (or `config/agent_config.yaml`) switches the synthesis LLM:
+
+| Provider | Env var | Default model |
+|----------|---------|---------------|
+| `mistral` (default) | `MISTRAL_API_KEY` | `mistral-small-latest` |
+| `openai` | `OPENAI_API_KEY` | `gpt-4o-mini` |
+| `anthropic` | `ANTHROPIC_API_KEY` | `claude-haiku-4-5-20251001` |
+
+## JEV — typed decision primitives
+
+JEV (by [TypeSafe](https://typesafe.ai)) provides three decision types used throughout the pipeline:
+
+- **`Choice`** — classify into one of N labeled options (with calibrated confidence)
+- **`Score`** — ordinal scoring on a defined scale
+- **`Noul`** — calibrated probability (0 → 1)
+
+The original Laya/JEV demo in `app.py` shows these primitives directly: support triage, content moderation, LLM routing — all as typed decisions with no text generation.
+
+## Running tests
+
+```bash
+pytest tests/
+```
+
+## Note on Laya (open-weights model)
+
+The `app.py` demo also supports **Laya** (convaiinnovations, 421M params), a local open-weights model for typed decisions. Per public benchmarks, zero-shot Laya accuracy is below a majority-class baseline on its own benchmark — fine-tuning on your domain is required before production use. The latency/cost argument is real; the accuracy is not. See the [model page](https://huggingface.co/convaiinnovations/laya).

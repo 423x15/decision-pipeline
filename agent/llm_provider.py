@@ -1,5 +1,5 @@
 """
-LLM provider abstraction — swap OpenAI ↔ Anthropic without touching engine code.
+LLM provider abstraction — swap OpenAI / Mistral / Anthropic without touching engine code.
 
 Engines always work with OpenAI-format message dicts internally.
 Adapters handle conversion at the API boundary.
@@ -63,6 +63,50 @@ class OpenAIProvider(LLMProvider):
         if response_format:
             kwargs["response_format"] = response_format
         resp = self._client.chat.completions.create(**kwargs)
+        msg = resp.choices[0].message
+        tool_calls = [
+            ToolCall(id=tc.id, name=tc.function.name, arguments=tc.function.arguments)
+            for tc in (msg.tool_calls or [])
+        ]
+        return ChatResponse(
+            content=msg.content,
+            tool_calls=tool_calls,
+            finish_reason=resp.choices[0].finish_reason or "stop",
+        )
+
+    def assistant_message(self, response: ChatResponse) -> dict:
+        msg: dict = {"role": "assistant", "content": response.content or ""}
+        if response.tool_calls:
+            msg["tool_calls"] = [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {"name": tc.name, "arguments": tc.arguments},
+                }
+                for tc in response.tool_calls
+            ]
+        return msg
+
+    def tool_result_message(self, tool_call_id: str, content: str) -> dict:
+        return {"role": "tool", "tool_call_id": tool_call_id, "content": content}
+
+
+# ── Mistral adapter ───────────────────────────────────────────────────────────
+
+class MistralProvider(LLMProvider):
+    def __init__(self, api_key: str, model: str = "mistral-small-latest"):
+        from mistralai.client import Mistral
+        self._client = Mistral(api_key=api_key)
+        self.model = model
+
+    def chat(self, messages, tools=None, response_format=None) -> ChatResponse:
+        kwargs: dict = dict(model=self.model, messages=messages)
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
+        if response_format and response_format.get("type") == "json_object":
+            kwargs["response_format"] = {"type": "json_object"}
+        resp = self._client.chat.complete(**kwargs)
         msg = resp.choices[0].message
         tool_calls = [
             ToolCall(id=tc.id, name=tc.function.name, arguments=tc.function.arguments)
@@ -163,7 +207,7 @@ class AnthropicProvider(LLMProvider):
         if tools:
             kwargs["tools"] = _oai_tools_to_anthropic(tools)
         if response_format and response_format.get("type") == "json_object":
-            kwargs["system"] = (kwargs.get("system", "") + "\nRéponds UNIQUEMENT en JSON valide.").strip()
+            kwargs["system"] = (kwargs.get("system", "") + "\nReply ONLY with valid JSON.").strip()
 
         resp = self._client.messages.create(**kwargs)
 
@@ -211,19 +255,25 @@ def create_provider(
     model: str | None = None,
 ) -> LLMProvider:
     """
-    provider_name : "openai" | "anthropic"  (default: LLM_PROVIDER env var or "openai")
-    api_key       : override — sinon lit OPENAI_API_KEY ou ANTHROPIC_API_KEY
-    model         : override — sinon lit LLM_MODEL env var ou default du provider
+    provider_name : "mistral" | "openai" | "anthropic"  (default: LLM_PROVIDER env var or "mistral")
+    api_key       : override — otherwise reads MISTRAL_API_KEY / OPENAI_API_KEY / ANTHROPIC_API_KEY
+    model         : override — otherwise reads LLM_MODEL env var or provider default
     """
-    name = (provider_name or os.environ.get("LLM_PROVIDER", "openai")).lower()
+    name = (provider_name or os.environ.get("LLM_PROVIDER", "mistral")).lower()
+    if name == "mistral":
+        key = api_key or os.environ.get("MISTRAL_API_KEY", "")
+        if not key:
+            raise ValueError("MISTRAL_API_KEY missing — add it to .env")
+        m = model or os.environ.get("LLM_MODEL", "mistral-small-latest")
+        return MistralProvider(api_key=key, model=m)
     if name == "anthropic":
         key = api_key or os.environ.get("ANTHROPIC_API_KEY", "")
         if not key:
-            raise ValueError("ANTHROPIC_API_KEY manquant dans .env")
+            raise ValueError("ANTHROPIC_API_KEY missing — add it to .env")
         m = model or os.environ.get("LLM_MODEL", "claude-haiku-4-5-20251001")
         return AnthropicProvider(api_key=key, model=m)
     key = api_key or os.environ.get("OPENAI_API_KEY", "")
     if not key:
-        raise ValueError("OPENAI_API_KEY manquant dans .env")
+        raise ValueError("OPENAI_API_KEY missing — add it to .env")
     m = model or os.environ.get("LLM_MODEL", "gpt-4o-mini")
     return OpenAIProvider(api_key=key, model=m)

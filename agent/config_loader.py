@@ -45,6 +45,6 @@ def load_config(path: Path = CONFIG_PATH) -> AgentConfig:
         reasoning_max_steps=int(r.get("max_steps", 6)),
         reasoning_max_tool_calls_per_step=int(r.get("max_tool_calls_per_step", 3)),
         # env vars always win over yaml
-        llm_provider=os.environ.get("LLM_PROVIDER") or llm.get("provider", "openai"),
-        llm_model=os.environ.get("LLM_MODEL") or llm.get("model", "gpt-4o-mini"),
+        llm_provider=os.environ.get("LLM_PROVIDER") or llm.get("provider", "mistral"),
+        llm_model=os.environ.get("LLM_MODEL") or llm.get("model", "mistral-small-latest"),
     )
